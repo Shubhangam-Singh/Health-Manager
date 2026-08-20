@@ -172,3 +172,70 @@ exceptions to argue about.
 
 **Interview line:** domain logic is framework-agnostic; porting to Express or Nest
 would mean rewriting the controller layer only.
+
+---
+
+## D8 — `cuid()` primary keys instead of auto-incrementing integers
+
+**Decision:** every table uses a string `cuid()` primary key.
+
+**Alternatives considered:** `@default(autoincrement())` integers — smaller, faster
+to index, easier to read in logs. UUID v4 — unguessable, but random ordering hurts
+B-tree index locality on insert.
+
+**Why chosen:** sequential integers are enumerable. `/appointments/41` implies
+`/appointments/42` exists, and any authorisation gap turns into a walkable index of
+every patient record — an IDOR vulnerability with real consequences in a healthcare
+context. `cuid()` is collision-resistant and roughly time-ordered, so it keeps
+index locality without being guessable.
+
+**Trade-off accepted:** wider keys, therefore larger indexes and slightly slower
+joins. Irrelevant at this scale, and defence-in-depth on object references is worth
+more than the bytes.
+
+---
+
+## D9 — One `User` table for all three roles
+
+**Decision:** patients, doctors and admins share a single `User` table
+discriminated by a `Role` enum, with role-specific data in satellite tables such as
+`DoctorProfile`.
+
+**Alternatives considered:** separate `Patient`, `Doctor` and `Admin` tables. That
+duplicates the login flow three times, splits email uniqueness across three
+namespaces — so one person could register as both a patient and a doctor with the
+same address — and forces every foreign key to answer "which table?" first.
+
+**Why chosen:** one authentication path, one uniqueness constraint on email, one
+target for foreign keys. `Appointment.patientId` and `Appointment.doctorId` both
+reference `User.id`.
+
+**Trade-off accepted:** the `User` table holds columns irrelevant to some roles, and
+"is this user actually a doctor?" becomes a check rather than a guarantee of the type
+system. Mitigated by `DoctorProfile` existing only for doctors, so a missing profile
+is itself a signal.
+
+---
+
+## D10 — Pooled connection for the app, direct connection for migrations
+
+**Decision:** `.env` holds two URLs for the same Neon database. `DATABASE_URL` points
+at the pooled endpoint and is used by the application at runtime. `DIRECT_URL` points
+at the direct endpoint and is what `prisma.config.ts` gives the CLI.
+
+**Why chosen:** two independent constraints.
+
+- *Runtime:* serverless functions are short-lived and each cold start wants its own
+  connection, while Postgres enforces a hard `max_connections`. Neon's PgBouncer
+  multiplexes many client connections onto few server ones. Without it, traffic
+  exhausts the pool and requests fail with connection errors under exactly the
+  concurrent load this project is graded on.
+- *Migrations:* PgBouncer in transaction mode cannot hold session state, so advisory
+  locks and `CREATE TYPE` — both of which Prisma migrations use — fail against it.
+
+**Trade-off accepted:** two secrets to manage instead of one, and a real deployment
+footgun if the wrong one is set in Vercel. Documented in `.env` itself with the
+reason inline, so the distinction is visible where it is used rather than only here.
+
+**Interview line:** the pooled endpoint is about connection *scarcity* at runtime;
+the direct endpoint is about session *capability* at migration time.

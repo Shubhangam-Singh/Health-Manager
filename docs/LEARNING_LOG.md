@@ -121,3 +121,60 @@ middleware protects `/patient/*`, `/doctor/*`, `/admin/*` by URL prefix — and 
 group produces no URL to match. The literal reading would have required
 `(patient)/patient/dashboard/`. `(auth)` stays a route group because login and
 register genuinely want a shared layout without a shared prefix.
+
+---
+
+## Step 4 — Postgres on Neon + Prisma
+
+**Built:** Neon project (AWS Singapore, free tier), Prisma 7 installed and
+initialised, `User` model defined, first migration applied, client generated.
+
+**Concepts that appeared:**
+
+- **What an ORM saves you from.** Hand-written SQL means string concatenation (the
+  road to SQL injection), manual row-to-object mapping, and column renames that break
+  silently at runtime instead of loudly at compile time.
+- **A migration is a permanent, ordered record of one schema change.** Prisma diffed
+  my `schema.prisma` against the live database and emitted the SQL itself — I wrote
+  none of it. Replaying the folder on an empty Postgres reproduces the schema
+  exactly. This is why migrations are committed to git.
+- **`cuid()` over auto-increment integers.** Sequential ids leak row counts and are
+  guessable, so `/patient/2` → `/patient/3` reads someone else's record. That is an
+  IDOR vulnerability, and it matters more in healthcare than almost anywhere.
+- **`@unique` is the same mechanism as the double-booking fix.** It becomes a real
+  Postgres `UNIQUE` constraint. Two simultaneous registrations with one email can
+  both pass an application-level check, but the database accepts exactly one and
+  raises `P2002` for the other. Step 15 applies the identical idea to
+  `(doctorId, startAt)`.
+- **Enums are real Postgres types.** `CREATE TYPE "Role" AS ENUM (...)` — the
+  database itself rejects an invalid role. Defaulting to `PATIENT` means a bug in
+  registration can never mint an admin.
+- **Indexes are the book-index analogy.** Without one, "find all doctors" reads every
+  row. They cost write speed and disk, so they go where queries actually are.
+- **One `User` table for all three roles** — one login flow, one namespace for email
+  uniqueness, one target for foreign keys. Role-specific fields go in
+  `DoctorProfile` via a one-to-one relation in Step 10.
+- **Pooled vs direct connection.** Same database, two endpoints. The app uses the
+  pooled one because serverless opens many short-lived connections against a hard
+  Postgres cap. Migrations must use the direct one, because a transaction-mode
+  pooler cannot do advisory locks or `CREATE TYPE`.
+- **`updatedAt` has no SQL default.** Prisma writes it from the client on every
+  update, so a raw `UPDATE` in the SQL editor will not touch it.
+
+**Prisma 7 differences from most tutorials online:**
+
+- The connection string lives in `prisma.config.ts`, not in the `datasource` block.
+- `prisma.config.ts` accepts only `url` and `shadowDatabaseUrl` — there is no
+  `directUrl` field as there was in Prisma 5/6, so the CLI is pointed at
+  `DIRECT_URL` directly.
+- The client generates into `src/generated/prisma` as TypeScript, so imports come
+  from there rather than from `@prisma/client`.
+
+**Mistake made and fixed:** `prisma init` installed AI-assistant docs into
+`.agents/`, `.windsurf/` and `.claude/` — and `.claude/skills/*` were *symlinks* into
+`.agents/`. Deleting `.agents/` left committed dangling symlinks (git mode `120000`).
+Removed all of it; `prisma init` can regenerate it if ever needed.
+
+**Security check performed:** confirmed `.env` is untracked and appears in no commit.
+`.gitignore` line 34 (`.env*`) covers it. The repo already has a public remote
+(`Shubhangam-Singh/Health-Manager`), so this mattered.
