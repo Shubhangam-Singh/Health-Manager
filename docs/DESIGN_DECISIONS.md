@@ -117,3 +117,58 @@ inside `useEffect`, never during a Client Component's render.**
 This decision directly supports the thin-API/fat-service rule in D1: pages read data
 through server-side service calls, and API route handlers exist for *mutations* and
 for genuine client-side needs, not as a data-plumbing layer for every page.
+
+---
+
+## D6 — Real path segments for portals, route group only for auth
+
+**Decision:** `/patient/*`, `/doctor/*`, `/admin/*` are real directories.
+`(auth)` — holding login and register — is the only route group.
+
+**Alternatives considered:**
+
+- *Route groups for all four,* as originally sketched. But a route group contributes
+  nothing to the URL, and the middleware in Step 8 authorises by URL prefix. Keeping
+  both would mean `(patient)/patient/dashboard/` — the segment named twice.
+- *No grouping at all,* with login and register as plain top-level routes. Loses the
+  shared centred-card layout, or duplicates it in two files.
+
+**Why chosen:** the URL should encode the role boundary, because that boundary is
+what middleware matches on. `/admin/doctors` is self-describing and greppable.
+Meanwhile login and register genuinely want a shared shell without a shared prefix —
+which is exactly the problem route groups solve.
+
+**Trade-off accepted:** two different organising conventions in one `app/` directory,
+which needs a sentence of explanation to a reader. Worth it, because the alternative
+is either a doubled folder name or a middleware matcher that cannot see its targets.
+
+---
+
+## D7 — Thin route handlers, fat services
+
+**Decision:** every file under `app/api/**/route.ts` stays under ~25 lines and does
+four things only: parse input, authorise, call a service, shape the response. All
+domain logic lives in `src/server/services/*.ts` as plain functions that never touch
+`Request` or `NextResponse`.
+
+**Alternatives considered:**
+
+- *Logic inside route handlers,* the default Next tutorial style. Fine for a
+  single-caller endpoint; wrong here.
+- *A full repository/controller/use-case layering.* More ceremony than a three-day
+  project can justify, and the extra indirection would not earn marks.
+
+**Why chosen:** booking logic has **three** callers — the patient booking endpoint,
+the admin leave-cancellation flow, and the cron worker. Logic embedded in an HTTP
+handler can only be reached by making an HTTP request, so the server would end up
+calling its own endpoint, or the logic would be copy-pasted and drift. Services are
+also directly unit-testable without constructing a fake `Request`, which is what
+makes `generateSlots()` testable in Step 12.
+
+**Trade-off accepted:** one extra file per feature, and a layer that looks like
+overkill for genuinely trivial endpoints (`health.service.ts` returns a literal).
+The consistency is the point — the boundary holds precisely because there are no
+exceptions to argue about.
+
+**Interview line:** domain logic is framework-agnostic; porting to Express or Nest
+would mean rewriting the controller layer only.

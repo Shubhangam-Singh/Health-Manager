@@ -82,3 +82,42 @@ HTTP 500 at compile time, with the message *"This React Hook only works in a Cli
 Component."* Compile-time, not runtime — Next catches it while building.
 
 **Note:** `src/app/demo/` is scaffolding for learning and gets deleted in Step 3.
+
+---
+
+## Step 3 — Folder structure and route groups
+
+**Built:** deleted the `demo/` scaffolding and laid down the real skeleton — `(auth)`
+route group with a shared card layout, `patient/` `doctor/` `admin/` portal segments,
+`api/health` plus the three `api/cron/*` folders, and `src/server/{services,llm,lib,
+validation}`.
+
+**Concepts that appeared:**
+
+- **Route groups.** A folder in parentheses is invisible to the URL.
+  `app/(auth)/login/page.tsx` serves `/login`, and `/auth/login` returns 404 —
+  verified both. The point is grouping by *shared layout* rather than by URL path.
+- **`route.ts` vs `page.tsx`.** Same file-based routing rule, different keyword:
+  `page.tsx` makes a URL render HTML, `route.ts` makes it an API endpoint. They
+  cannot both live in one folder.
+- **HTTP verbs are named exports.** `export async function GET()` — Next wires it up
+  by the function name. Adding POST/PATCH/DELETE means adding more exports to the
+  same file. This replaces Express's `app.get("/health", handler)`.
+- **Thin API, fat services.** The route handler only calls the service and shapes the
+  HTTP response. `health.service.ts` contains no `Request`, no `NextResponse`, no
+  status codes — just a plain function returning a plain object.
+- **Why that matters concretely:** the cron worker in Step 25 imports the same
+  services with no HTTP involved. Logic living inside a route handler would have to
+  be duplicated, or the server would end up calling its own HTTP endpoint.
+- **Git tracks files, not directories.** Empty folders need a `.gitkeep` or they
+  vanish from the repo.
+- **`.next/` is build cache.** After deleting `demo/`, `tsc` still reported errors
+  from generated types in `.next/types` pointing at files that no longer existed.
+  Deleting the stale cache cleared them — the source was never wrong.
+
+**Divergence from the plan, and the reason:** `CLAUDE.md` sketches `(patient)`,
+`(doctor)`, `(admin)` as route groups. I used real segments instead, because Step 8's
+middleware protects `/patient/*`, `/doctor/*`, `/admin/*` by URL prefix — and a route
+group produces no URL to match. The literal reading would have required
+`(patient)/patient/dashboard/`. `(auth)` stays a route group because login and
+register genuinely want a shared layout without a shared prefix.

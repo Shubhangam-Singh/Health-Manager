@@ -1,0 +1,33 @@
+// Prisma schema — the single source of truth for the database shape.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // NOTE: no `url` here. In Prisma 7 the connection string lives in
+  // prisma.config.ts, which reads process.env.DATABASE_URL via dotenv.
+}
+
+/// Every human who can log in — patients, doctors and admins share one table.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role     @default(PATIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([role])
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
