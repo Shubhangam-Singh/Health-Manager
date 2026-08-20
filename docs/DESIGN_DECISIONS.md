@@ -239,3 +239,53 @@ reason inline, so the distinction is visible where it is used rather than only h
 
 **Interview line:** the pooled endpoint is about connection *scarcity* at runtime;
 the direct endpoint is about session *capability* at migration time.
+
+---
+
+## D11 — Secrets stay server-side; `NEXT_PUBLIC_` is treated as publication
+
+**Decision:** only `NEXT_PUBLIC_APP_URL` carries the public prefix. Every credential
+— database URLs, `AUTH_SECRET`, `GEMINI_API_KEY`, Gmail app password, Google OAuth
+client secret, `CRON_SECRET` — is server-only, and any code needing them runs in a
+Server Component, a route handler, or a service.
+
+**Alternatives considered:** calling the Gemini API directly from the browser, which
+is simpler and removes a server hop. It also requires shipping the API key to every
+visitor, so it was never viable.
+
+**Why chosen:** verified empirically rather than assumed — building the app and
+grepping `.next/static` showed a `NEXT_PUBLIC_` value inlined as a **string literal**
+in a downloadable chunk, with the variable name compiled away entirely. The prefix
+does not "expose the value to client code"; it *publishes* it.
+
+**Trade-off accepted:** every third-party call needs a server-side route or service,
+which is more code than calling the API from the browser. That cost is already paid
+by the thin-API/fat-service structure in D7, and it buys rate limiting and auditing
+at the same boundary.
+
+**Operational consequence worth stating in an interview:** `NEXT_PUBLIC_` values are
+inlined at **build** time, not read at runtime. Changing one in the hosting dashboard
+has no effect without a rebuild, and rotating a leaked one does not invalidate
+bundles already cached in CDNs and browsers.
+
+---
+
+## D12 — `.env.example` committed via an explicit gitignore negation
+
+**Decision:** `.gitignore` keeps the broad `.env*` wildcard and adds `!.env.example`
+immediately after it.
+
+**Context:** the wildcard alone matched the template too, so a required deliverable
+would silently never have been committed — the kind of failure noticed only when
+someone clones the repository and finds nothing documenting the configuration.
+
+**Alternatives considered:** narrowing the wildcard to `.env` and `.env.local`. That
+re-opens the door to a future `.env.production` or `.env.backup` being committed by
+accident, which is the failure mode with real consequences.
+
+**Why chosen:** keep the deny-by-default wildcard and carve out the one file
+explicitly. Safe by default, with a single visible exception.
+
+**Trade-off accepted:** negation patterns are easy to get wrong — they must follow
+the pattern they override, and git cannot re-include a file whose parent directory is
+excluded. Verified with `git check-ignore` in both directions rather than assumed.

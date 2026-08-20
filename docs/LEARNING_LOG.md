@@ -178,3 +178,48 @@ Removed all of it; `prisma init` can regenerate it if ever needed.
 **Security check performed:** confirmed `.env` is untracked and appears in no commit.
 `.gitignore` line 34 (`.env*`) covers it. The repo already has a public remote
 (`Shubhangam-Singh/Health-Manager`), so this mattered.
+
+---
+
+## Step 5 — Environment variables and secrets
+
+**Built:** `.env.example` documenting all 13 keys, generated `AUTH_SECRET` and
+`CRON_SECRET`, fixed a `.gitignore` bug, verified no secret is in git history.
+
+**Concepts that appeared:**
+
+- **An env var is what differs between machines while the code stays identical.**
+  Laptop and Vercel run the same build against different databases.
+- **Why secrets never enter git.** History is permanent. Committing a key then
+  deleting it in the next commit leaves it in the old commit forever, and if pushed
+  it is scraped within minutes. The only real remedy is rewriting history *and*
+  rotating the key.
+- **`NEXT_PUBLIC_` is a decision, not a convenience.** I proved this rather than
+  taking it on trust: built the app with two vars and grepped `.next/static`, which
+  is what browsers download. The shipped chunk contained
+  `String("printed-on-menu-PUBLIC-x9y8z7")` — the variable name **gone**, replaced by
+  a string literal at build time. The server-only var was still
+  `String(r.env.DEMO_SERVER_ONLY)`, a lookup that resolves to `undefined` in the
+  browser. The value never left the server.
+- **Three consequences of build-time inlining:** changing a `NEXT_PUBLIC_` var in
+  Vercel does nothing until a rebuild; rotating a leaked one is not enough because
+  old bundles sit in CDN and browser caches; and adding the prefix is an explicit
+  statement that the value may be public.
+- **The failure mode to watch for:** a client component needs a key, gets
+  `undefined`, and someone "fixes" it by adding `NEXT_PUBLIC_`. It works — and the
+  key is now public and billable by strangers.
+
+**Bug found and fixed:** `.gitignore` contained `.env*`, whose wildcard also matched
+**`.env.example`** — a required deliverable that would silently never have been
+committed. Likely only discovered when a reviewer cloned the repo and found nothing
+to configure. Fixed with a negation: `!.env.example` after the wildcard. Git
+negations must come *after* the pattern they override.
+
+**Verification performed:** `git check-ignore` confirms `.env` ignored and
+`.env.example` committable; `git log -S` on the database password returns nothing, so
+it exists in no commit; `git status` before committing showed `.env` absent from the
+staged set.
+
+**Already done ahead of the plan:** git identity was set
+(`Shubhangam-Singh` / `shubhangam2005singh@gmail.com`) and the repository already has
+commits and a GitHub remote.
