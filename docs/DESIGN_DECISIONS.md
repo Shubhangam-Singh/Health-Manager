@@ -491,3 +491,69 @@ same credentials will never succeed.
 
 **Interview line:** middleware is a convenience for page navigation. An attacker
 does not browse to `/admin/doctors`; they curl `POST /api/doctors`.
+
+---
+
+## D20 — Working hours as rows, with times as minutes since midnight
+
+**Decision:** `WorkingHour` is a table with one row per continuous shift, holding
+`dayOfWeek` (0–6) and `startMinute`/`endMinute` as integers counting from midnight in
+clinic local time. `(doctorId, dayOfWeek)` is deliberately not unique.
+
+**Alternatives considered:**
+
+- *A JSON column on `DoctorProfile`,* e.g. `{"tue":[["09:00","13:00"]]}`. Fewer tables
+  and trivially editable as a whole. Rejected: Postgres cannot index inside it
+  usefully, cannot constrain it, and cannot answer "which cardiologists work Tuesday
+  morning?" in SQL — that filtering moves into JavaScript, fetching every doctor to
+  find three.
+- *`DateTime` or `@db.Time` columns.* Rejected on conceptual grounds: a working hour
+  is **not an instant**, it is a recurring wall-clock time. "Opens at 9" holds every
+  week regardless of date or daylight saving. A `DateTime` forces an arbitrary date
+  onto it and invites timezone conversion that must not happen.
+- *Strings like `"09:00"`.* Readable and sortable when zero-padded, but every
+  arithmetic operation needs parsing first, and nothing prevents `"25:00"`.
+
+**Why chosen:** integers make slot generation arithmetic rather than parsing —
+`start`, `start + slotDurationMin`, repeat until `endMinute`. They sort naturally,
+compare cheaply, and accept a CHECK constraint bounding them to a real day.
+
+**Trade-off accepted:** `540` is not human-readable, so display needs a formatter and
+the seed data needs a comment. Accepted because the value is read by code far more
+often than by people, and the alternative pushes complexity into the hot path.
+
+**Split shifts drove the uniqueness decision:** a doctor working 09:00–13:00 and
+17:00–20:00 on a Tuesday is two rows. A unique constraint on `(doctorId, dayOfWeek)`
+would have made that arrangement impossible to express.
+
+---
+
+## D21 — Invariants the ORM cannot express are written as raw SQL CHECK constraints
+
+**Decision:** a hand-written migration adds CHECK constraints for weekday range,
+minute range with `startMinute < endMinute`, and a positive slot duration.
+
+**Alternatives considered:** relying on the zod schemas that already validate the
+same rules at the API boundary. That is necessary but not sufficient — zod guards
+exactly one path. A seed script, a manual correction in the SQL editor, a background
+job, or a future endpoint written in a hurry all write directly to the table and
+bypass it entirely.
+
+**Why chosen:** the database is the one component every writer must pass through, so
+invariants that must never be violated belong there. Constraints are also
+self-documenting: `startMinute < endMinute` states the rule permanently, next to the
+data, where a reader will find it.
+
+`slotDurationMin > 0` is not decorative — a zero or negative duration makes the
+Step 12 slot-generation loop fail to terminate. A CHECK turns a potential hang into a
+rejected write.
+
+**Trade-off accepted:** hand-written migrations are not reflected in
+`schema.prisma`, so the file no longer tells the whole story and a reader must also
+consult `prisma/migrations/`. Mitigated with an explanatory comment in the migration
+and by documenting the constraints in the README's schema section.
+
+**This is the same technique Step 15 needs.** The partial unique index preventing
+double-booking is likewise inexpressible in Prisma. Establishing the
+`migrate dev --create-only` workflow here means the graded step introduces only the
+new idea, not the mechanics.

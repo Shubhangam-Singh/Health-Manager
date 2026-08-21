@@ -445,3 +445,61 @@ patient requesting `/admin/dashboard` still gets 302 to `/unauthorized`.
 
 **Not built yet:** the registration *page*. `POST /api/auth/register` works and is
 curl-tested, but there is no form for it, so `/register` is still a placeholder.
+
+---
+
+## Step 10 — Doctor-side schema: profiles, working hours, leave
+
+**Built:** `DoctorProfile`, `WorkingHour`, `LeaveDay`, plus a hand-written migration
+adding CHECK constraints. Phase 2 begins.
+
+**Concepts that appeared:**
+
+- **A relation is a foreign key** — a column holding another row's id.
+- **One-to-one is created by `@unique` on the foreign key.** `DoctorProfile.userId`
+  is unique, so one user cannot own two profiles. Remove the `@unique` and the same
+  columns become one-to-many. That single keyword is the whole difference.
+- **The optional back-relation carries meaning.** `User.doctorProfile` is
+  `DoctorProfile?`, so a patient simply has none — the *absence* of a profile is the
+  signal that a user is not a doctor, which pairs with the single-User-table decision
+  from D9.
+- **Cascade delete suits owned configuration, not history.** Deleting a doctor should
+  remove their working hours, which mean nothing without them. It must never remove
+  appointments — those are medical records. Appointments will use a different rule.
+- **Why rows and not a JSON blob.** Postgres cannot index inside JSON usefully,
+  cannot constrain it, and cannot answer "which cardiologists work Tuesday morning?"
+  in SQL. With JSON, filtering moves into JavaScript and you fetch every doctor to
+  find three. Rows give indexes, constraints and queryability.
+- **Split shifts drove a real schema choice.** `(doctorId, dayOfWeek)` is deliberately
+  NOT unique, because a doctor working 09:00–13:00 and 17:00–20:00 on a Tuesday is
+  two rows. Making it unique would have silently made split shifts impossible.
+
+**The most defensible decision in this step — working hours as integers.**
+`startMinute`/`endMinute` hold minutes since midnight in clinic local time.
+**A working hour is not an instant, it is a recurring wall-clock time.** "The clinic
+opens at 9" is true every week regardless of date or daylight saving. Storing it as a
+`DateTime` would force an arbitrary date onto it and invite timezone conversion that
+must never happen. Integers also make slot arithmetic trivial: `start`,
+`start + duration`, repeat. `540 = 09:00`.
+
+Same reasoning for `LeaveDay.date` using `@db.Date`: a calendar date with no time and
+no timezone, so "on leave 12 March" cannot mean different things on servers in
+different zones.
+
+**Prisma's limits, met for the first time.** Prisma cannot express CHECK constraints,
+so a migration was created with `--create-only` and the SQL written by hand — the
+same technique Step 15 uses for the partial unique index. Verified all four fire:
+
+- `dayOfWeek = 9` → rejected by `WorkingHour_dayOfWeek_range`
+- end before start → rejected by `WorkingHour_minutes_valid`
+- `endMinute = 2000` → rejected by `WorkingHour_minutes_valid`
+- `slotDurationMin = 0` → rejected by `DoctorProfile_slotDuration_positive`
+
+Worth stating clearly: zod already validates these on the API path, but zod guards
+**only that path**. A seed script, a manual fix in the SQL editor, or a future
+endpoint written in a hurry all bypass it. A CHECK constraint binds every writer.
+
+**Cascade proved, not assumed.** Created a temporary doctor with a profile, two
+working hours and one leave day, then deleted only the `User` row. All five rows
+disappeared — cascading two levels, User → DoctorProfile → WorkingHour/LeaveDay,
+with no application code involved.
