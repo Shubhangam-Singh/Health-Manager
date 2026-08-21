@@ -34,3 +34,13 @@ export const registerSchema = z.object({
 // The parsed, trusted type. Inferred from the schema, so it can never drift
 // out of sync with the validation rules.
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+// Login is deliberately laxer than registration: we validate SHAPE only, never
+// rules like minimum length. An old account whose password predates a rule
+// change must still be able to log in -- the stored hash is the only authority.
+export const loginSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email()),
+  password: z.string().min(1),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;

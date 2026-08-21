@@ -42,3 +42,33 @@ export async function registerUser(input: RegisterInput): Promise<PublicUser> {
     throw e;
   }
 }
+
+// A real bcrypt hash of a random throwaway string. Nothing can match it.
+// WHY IT EXISTS: if the email is not found we still run bcrypt.compare against
+// this, so a missing user costs the same ~100ms as a wrong password. Without
+// it, "no such user" returns in ~2ms and "wrong password" in ~100ms, and an
+// attacker times the difference to discover which emails have accounts.
+// That is a TIMING SIDE CHANNEL, and it enables user enumeration.
+const DUMMY_HASH = "$2b$10$y941bUHt1dcmQrfZqfTLLO2d6WW6Iyi3I5jUi3gE6jOoj/hoq4FyO";
+
+/**
+ * Returns the user on success, or null on ANY failure.
+ * Deliberately does not distinguish "no such email" from "wrong password" --
+ * that distinction is exactly what an attacker wants.
+ */
+export async function verifyCredentials(
+  email: string,
+  password: string,
+): Promise<PublicUser | null> {
+  const user = await prisma.user.findUnique({
+    where: { email: email.trim().toLowerCase() },
+    select: { id: true, email: true, name: true, role: true, passwordHash: true },
+  });
+
+  // Always hash, even when there is no user. Constant work, constant timing.
+  const matches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+
+  if (!user || !matches) return null;
+
+  return { id: user.id, email: user.email, name: user.name, role: user.role };
+}
