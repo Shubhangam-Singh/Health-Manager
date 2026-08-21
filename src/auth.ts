@@ -1,14 +1,14 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { authConfig } from "@/auth.config";
 import { verifyCredentials } from "@/server/services/auth.service";
 import { loginSchema } from "@/server/validation/auth.schema";
 
+// NODE RUNTIME ONLY. This file imports Prisma and bcryptjs through the auth
+// service, so it must never be imported by middleware. Middleware imports
+// auth.config.ts instead, which has no such dependencies.
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // JWT, not database sessions: no session table, no DB read per request.
-  // Cost: a token cannot be revoked before it expires. Hence the short maxAge.
-  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
-
-  pages: { signIn: "/login" },
+  ...authConfig,
 
   providers: [
     Credentials({
@@ -28,26 +28,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-
-  callbacks: {
-    // Runs when the token is CREATED (user present) and on every later read.
-    // Copy role and id in once, at creation, so they ride inside the token.
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id as string;
-        token.role = user.role as string;
-      }
-      return token;
-    },
-
-    // Shapes what client code sees via useSession()/auth(). The token itself
-    // is never exposed here -- only the fields we copy across.
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-      }
-      return session;
-    },
-  },
 });
