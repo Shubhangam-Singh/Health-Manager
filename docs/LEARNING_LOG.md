@@ -334,3 +334,54 @@ session cookie issued in any of them.
 token and cookie → `POST /api/auth/callback/credentials` with that token plus
 credentials → 302 with an `authjs.session-token` cookie → `GET /api/auth/session`
 returns `{ user: { id, email, name, role }, expires }`.
+
+---
+
+## Step 8 — Middleware and route protection
+
+**Built:** split auth config (`auth.config.ts` edge-safe, `auth.ts` Node-only),
+`middleware.ts` protecting the three portals by role, `/unauthorized` page,
+`requireAuth`/`requireRole` guards, and `toErrorResponse` for error mapping.
+
+**Concepts that appeared:**
+
+- **Middleware is a checkpoint that runs before the page** — the security desk in
+  the hospital lobby, checking badges before anyone reaches the ward.
+- **It runs on the Edge runtime,** a stripped-down JS environment with no Node APIs.
+  No filesystem, no TCP sockets, no `node:crypto`.
+- **The failure, seen rather than described.** Importing `@/auth` into middleware
+  gave HTTP 500 and an import trace that reads like a proof:
+  `middleware → src/auth.ts → auth.service.ts → generated/prisma/client.ts →
+  @prisma/client/runtime → node:crypto`. A second error showed `pg` reaching for
+  `pg-native`, a compiled C addon. Neither can exist on Edge.
+- **The fix is the split config.** `auth.config.ts` holds session strategy, pages,
+  the jwt/session callbacks and `authorized()` — and `providers: []`. `auth.ts`
+  spreads that config and adds the Credentials provider, which is the only part that
+  touches Prisma and bcrypt. Middleware constructs its own `NextAuth(authConfig)`
+  instance, which can still verify and read the JWT — all route protection needs.
+- **Three distinct outcomes, not two.** Not signed in → 307 to `/login` with a
+  `callbackUrl`. Signed in but wrong portal → 302 to `/unauthorized`. Correct role →
+  200. Bouncing an already-authenticated user to a login page is confusing, so
+  `authorized()` returns a `Response.redirect` for that case instead of `false`.
+
+**The lesson this step exists for — proved with curl.** I wrote an "admin-only"
+endpoint with no authorisation check, trusting middleware. With no cookie at all it
+returned **HTTP 200 and the data**. Two reasons: the matcher does not list `/api/*`,
+so middleware never ran; and more importantly, an endpoint whose security depends on
+a matcher config is one edit away from being public.
+
+After adding `requireRole("ADMIN")`: anonymous → 401, patient → 403, admin → 200.
+
+> **Middleware guards navigation. It is not a security boundary. Every route
+> handler must authorise itself.** An attacker does not browse to `/admin/doctors`;
+> they curl `POST /api/doctors`.
+
+**401 vs 403 matters:** 401 means "I do not know who you are" (sign in and retry);
+403 means "I know exactly who you are and the answer is still no". Retrying 403 with
+the same credentials will never help.
+
+**Consequence of the Step 6 mass-assignment defence, felt for real:** I could not
+create an admin through `/api/auth/register`, because the endpoint refuses to set
+`role`. The test admin had to be inserted directly via SQL. That is the design
+working as intended — a doctor or admin account is a claim about the real world that
+a public registration form cannot verify. Step 38's seed script does this properly.

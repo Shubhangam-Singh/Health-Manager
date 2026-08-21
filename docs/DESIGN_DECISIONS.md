@@ -431,3 +431,63 @@ removing the defence.
 it must. The mitigations for that path are rate limiting and CAPTCHA rather than a
 vague error, because a registration form that will not say "you already have an
 account" is close to unusable.
+
+---
+
+## D18 — Split auth config so middleware can run on the Edge runtime
+
+**Decision:** `auth.config.ts` holds everything edge-safe — session strategy, pages,
+the jwt/session callbacks, and `authorized()` — with `providers: []`. `auth.ts`
+spreads that config and adds the Credentials provider, which is the only piece that
+imports Prisma and bcryptjs. Middleware imports **auth.config**, never **auth**.
+
+**Alternatives considered:** forcing middleware onto the Node runtime, which loses
+the latency benefit of running at the edge and is not universally supported. Or
+dropping middleware entirely and authorising in every page — which is precisely the
+"one page where someone forgets" failure mode.
+
+**Why chosen:** this is not a stylistic split, it is a hard constraint discovered by
+running it. Importing `@/auth` into middleware fails at build with
+`UnhandledSchemeError: Reading from "node:crypto" is not handled`, traced through
+`auth.service → prisma client → @prisma/client/runtime → node:crypto`, plus `pg`
+requiring the native `pg-native` addon.
+
+The insight that makes the split work: **verifying a JWT needs only the secret, not
+the database.** Signing in needs Prisma and bcrypt; checking an already-issued token
+does not. So the expensive dependencies belong only on the sign-in path.
+
+**Trade-off accepted:** the config exists in two files and the callbacks must be
+kept in the edge-safe one, which is a real footgun — adding a database call to `jwt()`
+would break middleware at build time rather than at review time. Documented with a
+comment at the top of `auth.config.ts` stating the rule.
+
+---
+
+## D19 — Every API route authorises itself; middleware is navigation only
+
+**Decision:** `requireAuth()` and `requireRole(...roles)` are called inside route
+handlers. The middleware matcher covers only `/patient/*`, `/doctor/*` and
+`/admin/*`, and `/api/*` is deliberately excluded.
+
+**Alternatives considered:** extending the matcher to `/api/*` and letting middleware
+authorise everything. It would work for coarse role checks and would still be wrong
+as the *only* defence, for two reasons: middleware cannot do per-resource checks
+("is this *your* appointment?") without database access it does not have on Edge, and
+security that lives in a matcher config is invisible at the point it matters.
+
+**Why chosen — demonstrated rather than argued.** An "admin-only" endpoint written
+without a guard returned **HTTP 200 with its payload to a request carrying no
+cookie**. Adding `requireRole("ADMIN")` produced 401 anonymous, 403 patient, 200
+admin. Reading the route handler now tells you what it requires; previously the
+answer lived in a different file.
+
+**Trade-off accepted:** one repeated line per handler, and a real risk of omission.
+Mitigated by keeping handlers thin enough that a missing guard is visible on sight,
+and by the guard throwing `AppError` so `toErrorResponse` maps it consistently.
+
+**Status codes, stated precisely:** 401 means the caller is unidentified — sign in
+and retry. 403 means the caller is identified and still refused — retrying with the
+same credentials will never succeed.
+
+**Interview line:** middleware is a convenience for page navigation. An attacker
+does not browse to `/admin/doctors`; they curl `POST /api/doctors`.
