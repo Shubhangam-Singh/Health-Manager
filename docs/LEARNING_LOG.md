@@ -385,3 +385,63 @@ create an admin through `/api/auth/register`, because the endpoint refuses to se
 `role`. The test admin had to be inserted directly via SQL. That is the design
 working as intended — a doctor or admin account is a claim about the real world that
 a public registration form cannot verify. Step 38's seed script does this properly.
+
+---
+
+## Step 9 — Login page, redirect by role, first end-to-end flow
+
+**Built:** the login form, `/` as a role-routing server component, three dashboards
+rendering real session data, and a sign-out button. Phase 1 complete.
+
+**Concepts that appeared:**
+
+- **Forms need the browser,** so the login page is a Client Component — it holds
+  typed text in state and handles a submit event.
+- **`e.preventDefault()`** stops the browser's own full-page form POST so React can
+  handle the submit instead.
+- **`signIn(..., { redirect: false })`.** The default bounces the whole page on
+  failure, producing a reload with `?error=` in the URL and losing whatever the user
+  typed. Returning the result instead lets the error render inline above the form.
+- **`router.refresh()` after a successful login.** The cookie exists immediately, but
+  already-rendered Server Component output is still the cached logged-out version.
+  Without the refresh you log in and the page still looks logged out.
+- **Where the redirect rule lives.** Rather than reading the role in the browser and
+  pushing to a portal, everyone goes to `/`, and `/` is a Server Component that calls
+  `auth()` and redirects. One rule in one place, no client JavaScript, and nothing to
+  keep in sync.
+- **`redirect()` throws internally** to halt rendering, so nothing after it runs and
+  no `break` is needed inside the switch.
+- **Server Components can read the session directly** with `await auth()` — the
+  dashboards need no props, no fetch, and no API endpoint to show who is signed in.
+- **The error message stays vague** — "Invalid email or password" — preserving the
+  non-enumeration property from D17. A friendlier "no account with that email" would
+  undo the DUMMY_HASH work from Step 7 at the UI layer.
+
+**Debugging note worth remembering.** After building the page, a logged-in request to
+`/` returned 200 instead of redirecting, which looked like the `auth()` call failing
+in a Server Component. It was not a code bug: `/api/auth/session` returned `null`,
+so the cookie jar saved during the Step 8 tests had gone stale. A fresh login gave
+307 → `/patient/dashboard` and 307 → `/admin/dashboard` immediately. **Check whether
+the credential is still valid before suspecting the code that reads it.**
+
+**The full round trip, now working end to end:**
+
+1. Browser loads `/login` — server sends HTML, then hydrates the form.
+2. Submit → `signIn()` → `POST /api/auth/callback/credentials`.
+3. Auth.js runs `authorize()` → `verifyCredentials()` → Prisma reads `User` →
+   `bcrypt.compare`.
+4. On success the `jwt` callback copies `id` and `role` into the token, which is
+   encrypted and set as the `authjs.session-token` cookie.
+5. `router.push("/")` → the Server Component calls `auth()`, decrypts the cookie,
+   reads the role, and redirects to the matching portal.
+6. Middleware intercepts that request, verifies the token on the Edge runtime, and
+   confirms the role matches the path.
+7. The dashboard Server Component calls `auth()` again and renders the user's name,
+   email, role and id.
+
+Verified by curl: patient sees `Patient dashboard / Shubhangam / you@test.com /
+PATIENT`, admin sees `Admin dashboard / Test Admin / admin@test.com / ADMIN`, and a
+patient requesting `/admin/dashboard` still gets 302 to `/unauthorized`.
+
+**Not built yet:** the registration *page*. `POST /api/auth/register` works and is
+curl-tested, but there is no form for it, so `/register` is still a placeholder.
