@@ -282,3 +282,55 @@ Production evaluates the module once, so the cache is dev-only.
 **Curl results:** 201 valid · 409 duplicate · 409 duplicate with different case and
 whitespace · 400 per-field validation errors · 201-with-PATIENT for the ADMIN
 attempt · 400 for malformed JSON instead of a crash.
+
+---
+
+## Step 7 — Auth.js v5: credentials and role in the session
+
+**Built:** `src/auth.ts` with a Credentials provider, `verifyCredentials()` in the
+auth service, the `[...nextauth]` catch-all route, and module augmentation so
+`session.user.role` typechecks. Whole login flow tested with curl.
+
+**Concepts that appeared:**
+
+- **Sessions vs JWTs.** A database session is a cloakroom ticket — meaningless
+  alone, the server holds the data, and logging out means deleting a row. A JWT
+  carries the data itself and is verified by signature, so no storage and no DB read
+  per request.
+- **The trade-off to state in an interview: a JWT cannot be revoked.** There is no
+  row to delete, so a stolen token stays valid until it expires. That is exactly why
+  `maxAge` is 8 hours rather than 30 days.
+- **Why `role` goes in the token:** `/admin/*` can be authorised without a database
+  round trip on every page load. The cost is staleness — promote a user and their
+  existing token still says PATIENT until it refreshes.
+- **The `authorize` callback returns a user or `null`.** Throwing would leak the
+  reason to the client, so it never throws.
+- **Catch-all route segments.** `[...nextauth]` matches `/api/auth/signin`,
+  `/callback/credentials`, `/session`, `/csrf` and the rest from one file. Verified
+  that our own `/api/auth/register` still wins, because a static segment beats a
+  catch-all.
+- **Module augmentation.** `session.user.role` is a TypeScript error until you
+  `declare module "next-auth"` and extend `Session`, `User` and `JWT`. The library
+  cannot know what we chose to put in.
+
+**Correction to what I first wrote:** I said a JWT's contents are "readable by
+anyone". That is true of a standard JWT (JWS — three parts, base64 payload) but
+**not of ours**. Decoding the cookie showed **five** parts and a header of
+`{"alg":"dir","enc":"A256CBC-HS512"}` — this is a **JWE**, so Auth.js v5 *encrypts*
+the payload by default, not merely signs it. Part four is binary ciphertext.
+Signing proves nobody altered it; encryption means nobody can read it either.
+
+**Timing attacks and user enumeration — measured, not assumed.** If a missing email
+returns in ~5 ms while a wrong password takes ~170 ms (the cost of bcrypt), the
+difference is a working oracle for which emails have accounts — sensitive on its own
+for a healthcare platform. Fix: when no user is found, still run `bcrypt.compare`
+against a `DUMMY_HASH` of a random string, so both paths do identical work.
+
+Measured: wrong password 176 / 171 ms, nonexistent user 174 / 174 ms — a 2 ms spread
+that is just noise. Identical error codes and redirects in every failure case, and no
+session cookie issued in any of them.
+
+**The login flow in full, as exercised by curl:** `GET /api/auth/csrf` returns a
+token and cookie → `POST /api/auth/callback/credentials` with that token plus
+credentials → 302 with an `authjs.session-token` cookie → `GET /api/auth/session`
+returns `{ user: { id, email, name, role }, expires }`.

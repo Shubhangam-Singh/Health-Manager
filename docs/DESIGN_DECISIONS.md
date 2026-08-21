@@ -369,3 +369,65 @@ through even if the schema changed. Verified with curl — a request asking for
 by an admin (Step 11) or the seed script (Step 38). That is the correct behaviour
 for a clinic anyway: a doctor account is a claim about the real world that a
 registration form has no way to verify.
+
+---
+
+## D16 — JWT sessions rather than database sessions
+
+**Decision:** `session: { strategy: "jwt", maxAge: 8h }`. No session table. The
+token carries `id` and `role`, copied in by the `jwt` callback at creation.
+
+**Alternatives considered:** database sessions via the Prisma adapter. They give
+instant revocation — delete the row and the user is out — which is genuinely
+valuable for a healthcare app. The cost is a database read on **every** authenticated
+request, including every page load of every portal.
+
+**Why chosen:** the deployment target is serverless on a free tier, where each
+request may be a cold start and the database is remote. Adding an unavoidable round
+trip to every request is the wrong trade when the same information can travel inside
+a signed, encrypted cookie. Carrying `role` in the token also lets middleware
+authorise `/admin/*` without touching Postgres.
+
+**Trade-off accepted, and this is the honest weakness:** a JWT **cannot be revoked**.
+A stolen token is valid until expiry, and a role change does not take effect until the
+token refreshes. Mitigated by an 8-hour `maxAge` rather than the common 30 days.
+
+**What I would do differently at scale:** keep JWTs but add a small
+denylist of revoked token ids checked from cache, which restores revocation without
+a per-request database read.
+
+**Detail worth stating precisely in an interview:** Auth.js v5 issues a **JWE**, not a
+plain JWS. The cookie has five segments with `alg: dir, enc: A256CBC-HS512`, so the
+payload is encrypted rather than merely base64-encoded. The usual advice "never put
+anything sensitive in a JWT because anyone can read it" does not describe this setup —
+though the token is still a bearer credential, so it must not be exposed regardless.
+
+---
+
+## D17 — Authentication failures are indistinguishable by message and by timing
+
+**Decision:** `verifyCredentials` returns `null` for every failure and never
+indicates whether the email existed. When no user is found it still runs
+`bcrypt.compare` against a constant `DUMMY_HASH`.
+
+**Alternatives considered:** returning "no account with that email" versus "incorrect
+password", which is friendlier and is what many production sites do. Rejected because
+the endpoint is unauthenticated: anyone can submit a list of addresses and learn which
+have accounts. Knowing that a person is a patient at a clinic is itself sensitive
+health information, so this matters more here than on a typical consumer site.
+
+**Why the dummy hash is required:** identical *messages* are not enough. Without it,
+"no such user" returns after one indexed lookup (~5 ms) while "wrong password" pays
+for bcrypt (~170 ms). That 30× gap is trivially measurable and is a working
+enumeration oracle. Verified by measurement: 176 / 171 ms for wrong passwords against
+174 / 174 ms for nonexistent users.
+
+**Trade-off accepted:** worse UX — a user who mistypes their email sees "invalid
+credentials" rather than "no such account". Every failed login also burns ~100 ms of
+CPU, which is a small denial-of-service lever; rate limiting is the answer there, not
+removing the defence.
+
+**Consistency requirement:** registration *does* reveal that an email is taken, since
+it must. The mitigations for that path are rate limiting and CAPTCHA rather than a
+vague error, because a registration form that will not say "you already have an
+account" is close to unusable.
