@@ -23,6 +23,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// Only present when role = DOCTOR. Optional on this side, so a patient row
+  /// simply has none -- the absence itself signals "not a doctor".
+  doctorProfile DoctorProfile?
+
   @@index([role])
 }
 
@@ -30,4 +34,75 @@ enum Role {
   PATIENT
   DOCTOR
   ADMIN
+}
+
+/// Doctor-specific fields. Separate from User so the User table stays about
+/// identity and login, and so a missing profile means "not a doctor".
+model DoctorProfile {
+  id String @id @default(cuid())
+
+  /// @unique on the foreign key is what makes this ONE-TO-ONE. Without it,
+  /// one user could own several profiles.
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  specialisation  String
+  /// Appointment length in minutes. Drives slot generation in Step 12.
+  slotDurationMin Int     @default(30)
+  bio             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workingHours WorkingHour[]
+  leaveDays    LeaveDay[]
+
+  /// Patients search by specialisation, so it earns an index.
+  @@index([specialisation])
+}
+
+/// One row per continuous block a doctor works on a given weekday.
+/// NOT unique on (doctorId, dayOfWeek): split shifts are normal, e.g. a doctor
+/// working 09:00-13:00 and again 17:00-20:00 on a Tuesday is two rows.
+model WorkingHour {
+  id String @id @default(cuid())
+
+  doctorId String
+  doctor   DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  /// 0 = Sunday ... 6 = Saturday, matching JavaScript's Date.getDay().
+  dayOfWeek Int
+
+  /// Minutes since midnight in the CLINIC'S local time. 540 = 09:00.
+  ///
+  /// WHY NOT DateTime? A working hour is not an instant -- it is a recurring
+  /// wall-clock time. "The clinic opens at 9" is true every week regardless of
+  /// date or daylight saving. Storing it as a DateTime would force an
+  /// arbitrary date onto it and invite timezone conversion that must not
+  /// happen. Integers also make slot arithmetic trivial: start, start+duration.
+  startMinute Int
+  endMinute   Int
+
+  @@index([doctorId, dayOfWeek])
+}
+
+/// A single date a doctor is unavailable. Step 31 checks these before booking
+/// and detects conflicts with appointments already made.
+model LeaveDay {
+  id String @id @default(cuid())
+
+  doctorId String
+  doctor   DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  /// @db.Date stores a calendar date with NO time and NO timezone. Using a
+  /// full DateTime here would make "on leave 12 March" mean different things
+  /// to servers in different zones.
+  date   DateTime @db.Date
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  /// A doctor cannot be on leave twice for the same date. The database
+  /// enforces it, so a double-submit cannot create duplicates.
+  @@unique([doctorId, date])
 }
