@@ -289,3 +289,83 @@ explicitly. Safe by default, with a single visible exception.
 **Trade-off accepted:** negation patterns are easy to get wrong — they must follow
 the pattern they override, and git cannot re-include a file whose parent directory is
 excluded. Verified with `git check-ignore` in both directions rather than assumed.
+
+---
+
+## D13 — bcrypt at cost 10, with the password length capped at 72 bytes
+
+**Decision:** passwords are hashed with bcrypt at cost factor 10. The input schema
+rejects anything longer than 72 bytes.
+
+**Alternatives considered:** argon2id, the current recommendation, which resists
+GPU and ASIC attacks better through memory-hardness — but it needs a native module,
+which is friction on serverless. SHA-256 with a manual salt, which is wrong here:
+being fast is the entire problem. Plain SHA-256 unsalted, which is indefensible.
+
+**Why chosen:** bcrypt is pure JavaScript via `bcryptjs`, so it deploys anywhere with
+no build step, and it is deliberately slow with a tunable cost. Cost 10 is roughly
+100 ms — unnoticeable on login, prohibitive for brute force. The cost is embedded in
+the hash string, so it can be raised later without invalidating existing hashes:
+old ones keep verifying at their original cost and get re-hashed on next login.
+
+**Why the 72-byte cap matters:** bcrypt *silently truncates* beyond 72 bytes. Without
+the cap, a 200-character passphrase and its first 72 characters produce the same
+hash and both authenticate — the user believes they have far more entropy than they
+do. Rejecting the input is honest; silently ignoring the remainder is not.
+
+**Trade-off accepted:** argon2id would be stronger, and bcryptjs is slower than a
+native binding for the same cost. Both acceptable at this scale, and the deployment
+simplicity is worth more than the margin.
+
+---
+
+## D14 — Insert first and catch `P2002`, rather than checking then inserting
+
+**Decision:** registration does not query for an existing email before creating the
+user. It attempts the insert and translates the unique-constraint violation
+(`P2002`) into a `409 CONFLICT` naming the `email` field.
+
+**Alternatives considered:** `findUnique` first, then `create`. It reads more
+naturally and gives a friendlier message — and it is **not sufficient on its own**.
+
+**Why chosen:** the check-then-write pattern has a **TOCTOU** window — *time of check
+to time of use*. Between the read returning "available" and the insert executing,
+another request can claim the same email. The check was true when made and stale when
+used. The database constraint has no such window because it is evaluated atomically
+as part of the write.
+
+Given the constraint must exist and `P2002` must be handled regardless, the prior read
+buys only a marginally nicer path for the common case at the cost of an extra round
+trip and the illusion that it provides safety.
+
+**Trade-off accepted:** `P2002` identifies the violated constraint rather than
+carrying a human-readable message, so the service maps it explicitly. With several
+unique constraints on one table that mapping needs care — inspect
+`e.meta.target` to distinguish them.
+
+**This is deliberately the same shape as the booking fix.** `(doctorId, startAt)`
+replaces `email`, a partial unique index replaces the plain one, and `409 Slot just
+got taken` replaces the email message. Establishing the pattern on something simple
+means Step 15 introduces only the partial index, not the whole idea.
+
+---
+
+## D15 — `role` is never accepted from client input
+
+**Decision:** the registration schema has no `role` field, and the service hardcodes
+the omission so the column falls to its database default of `PATIENT`.
+
+**Why chosen:** spreading request data into a create call — `data: { ...input }` — is
+**mass assignment**, and it lets a caller set any column the ORM will accept,
+including `role: "ADMIN"`. In an app where role *is* the authorisation boundary, that
+single line is full privilege escalation from an unauthenticated endpoint.
+
+Two independent barriers: zod strips unknown keys, so `role` never reaches the
+service; and the service names every field it writes, so it could not pass one
+through even if the schema changed. Verified with curl — a request asking for
+`ADMIN` produced a `PATIENT` row.
+
+**Trade-off accepted:** doctors and admins cannot self-register and must be created
+by an admin (Step 11) or the seed script (Step 38). That is the correct behaviour
+for a clinic anyway: a doctor account is a claim about the real world that a
+registration form has no way to verify.

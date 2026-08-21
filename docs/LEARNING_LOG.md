@@ -223,3 +223,62 @@ staged set.
 **Already done ahead of the plan:** git identity was set
 (`Shubhangam-Singh` / `shubhangam2005singh@gmail.com`) and the repository already has
 commits and a GitHub remote.
+
+---
+
+## Step 6 — Registration: first API route, first service
+
+**Built:** `POST /api/auth/register` — zod schema, `auth.service.ts`, Prisma
+singleton, shared `AppError`. Tested entirely with curl; no UI exists yet.
+
+**Concepts that appeared:**
+
+- **Hashing is not encryption.** Encryption is reversible by design; hashing is
+  one-way. Logging in means hashing the attempt and comparing hashes — the plaintext
+  is never recovered, so stealing the database does not hand over passwords.
+- **What a salt does, demonstrated not asserted.** Registered two users with the
+  identical password `identicalpassword` and read the rows back: completely different
+  hashes. A salt makes precomputed rainbow tables useless and hides the fact that two
+  users share a password.
+- **The bcrypt string is self-describing:** `$2b$` variant, `$10$` cost factor, 22
+  characters of salt, then the hash. The salt is stored in the open, which is fine —
+  a salt is not a secret, its job is uniqueness. Storing the cost is what allows
+  raising it later: old hashes keep verifying at cost 10 while new ones use 12.
+- **bcrypt is deliberately slow,** roughly 100 ms at cost 10 — invisible when logging
+  in, ruinous when brute-forcing. Fast hashes like SHA-256 are the wrong tool here
+  because a GPU computes billions per second.
+- **bcrypt truncates at 72 bytes,** so the schema caps password length there.
+  Without the cap, a 200-character password and its first 72 characters hash
+  identically and both would log in.
+- **Mass assignment.** `data: { ...input }` would let anyone POST `role: "ADMIN"`.
+  Verified the defence with curl: the request asked for ADMIN and the row came back
+  PATIENT. Two independent barriers — the schema does not accept `role`, and the
+  service does not pass it.
+- **`select` excludes `passwordHash`** so it cannot leak into a response by accident.
+- **No pre-check before insert.** Attempt the write, catch `P2002`. One round trip
+  and no TOCTOU window. Same shape as the booking fix in Step 15.
+- **A route handler is just `Request` in, `Response` out** — an Express controller
+  with a different wrapper. Next wires it by the exported function name.
+
+**Bug found and fixed — validation vs transformation order.** I wrote
+`z.email().toLowerCase().trim()`. zod validates FIRST and transforms after, so
+`"  shubh@test.com  "` was rejected as an invalid email before `trim()` ran. Curl
+isolated it: uppercase without spaces returned 409 correctly, lowercase with spaces
+returned 400. Fixed with `z.string().trim().toLowerCase().pipe(z.email())`, which
+forces normalise-then-validate. Not academic — mobile keyboards append spaces
+constantly, and the user would have seen "invalid email" for an email that is fine.
+
+**Prisma 7 surprise:** `new PrismaClient({ datasourceUrl })` does not exist. Prisma 7
+removed the Rust query engine and **requires a driver adapter** —
+`new PrismaPg({ connectionString })` from `@prisma/adapter-pg` over the `pg` driver.
+Upside worth stating in an interview: no native binary means smaller serverless
+bundles and faster cold starts.
+
+**Why the Prisma singleton exists:** Next hot-reloads modules on every save, and a
+plain `new PrismaClient()` at module scope would open a fresh connection pool each
+time until Neon refuses connections. Caching on `globalThis` survives hot reload.
+Production evaluates the module once, so the cache is dev-only.
+
+**Curl results:** 201 valid · 409 duplicate · 409 duplicate with different case and
+whitespace · 400 per-field validation errors · 201-with-PATIENT for the ADMIN
+attempt · 400 for malformed JSON instead of a crash.
