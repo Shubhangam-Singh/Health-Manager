@@ -842,3 +842,65 @@ types, not compiling them**:
 fixture I made up would test my imagination rather than Prisma's actual behaviour —
 and given `meta.target` turned out not to exist, an invented fixture would have
 passed while the production code failed.
+
+---
+
+## Step 17 — Slot hold mechanism ⭐
+
+**Built:** `SlotHold`, `hold.service.ts`, `POST/GET /api/holds`,
+`DELETE /api/holds/:id`, and `scripts/hold-test.ts`. Graded problem 2.
+
+**The problem it solves, stated as UX:** a patient picks 10:00, spends two or three
+minutes on the symptom form, presses Confirm, and is told the slot was just taken.
+They typed all of that for nothing, and the system behaved *correctly*. That is the
+worst kind of correct.
+
+**Concepts that appeared:**
+
+- **A hold is a short-lived reservation** — the seat timer on a cinema booking site.
+  Ten minutes, then the slot goes back.
+- **Why Postgres and not Redis with a TTL.** Redis is the textbook answer and is
+  genuinely good: automatic expiry, very fast. It also means a second datastore to
+  deploy and pay for, and — the deciding argument — the hold and the appointment
+  would live in **different systems**, so converting one into the other could no
+  longer be a single atomic transaction. Postgres gives the same exclusivity inside
+  the same transaction as the booking. Redis is the scale-up path, not the start.
+- **The thing Redis does for free and we must do ourselves: expiry.** A row whose
+  `expiresAt` has passed is still a row, and still occupies the unique key.
+  **An expired hold that nobody deletes locks that slot forever.**
+- **Two cleanup paths, deliberately.** Lazy expiry inside `createHold` deletes a dead
+  hold on the slot being claimed; the cron sweep in Step 37 catches slots nobody
+  retries. Lazy alone leaves an untouched slot invisible indefinitely.
+- **Reads must not write.** `getAvailableSlots` filters holds by `expiresAt > now`
+  rather than deleting them. A GET that mutates is surprising, and it would make an
+  availability check take a write lock.
+- **Plain unique here, partial for Appointment — and the contrast is the point.**
+  Appointments keep cancelled rows forever because they are medical records, so the
+  index must exclude them. A hold is ephemeral and is deleted, so nothing lingers in
+  the key and a plain constraint is correct.
+- **One live hold per patient.** Creating a hold deletes the patient's previous one.
+  That matches the UX (selecting a new slot abandons the old) and prevents one user
+  holding every slot a doctor has — which would otherwise be a trivial denial of
+  service.
+- **Re-holding your own slot returns the existing hold** instead of erroring. A
+  double-click must not be a failure.
+- **`releaseHold` returns 404, not 403, for someone else's hold.** A 403 would
+  confirm that the hold exists — that is, that some other patient is booking that
+  slot. Same non-disclosure reasoning as D17.
+
+**Verified by `scripts/hold-test.ts`:**
+
+```
+  1. two patients race        → 201 and 409  ✅
+  2. slot hidden from others  → yes ✅
+  3. release (204) returns it → yes ✅
+  4. once expired, reappears  → yes ✅
+     another patient claims it → yes ✅
+     rows on that slot: 1 (not 2) ✅
+```
+
+**Mistake caught in my own test script:** check 4 originally printed "invisible to
+others: yes" when the slot had in fact become *visible* — the label was inverted, so a
+passing test read as though it were asserting the opposite. Corrected to "once
+expired, slot reappears in availability". A test whose output misdescribes what it
+checked is worse than no test.

@@ -882,3 +882,68 @@ not in responses an attacker can read.
 **Consistency rule adopted:** no route handler constructs an error response itself.
 Every one ends with `catch (e) { return toErrorResponse(e); }`, verified by grepping
 for `HTTP_STATUS` under `src/app/` — zero matches.
+
+---
+
+## D33 — Slot holds in Postgres, not Redis
+
+**Decision:** selecting a slot writes a `SlotHold` row with
+`UNIQUE(doctorId, startAt)` and a ten-minute `expiresAt`. Availability excludes live
+holds. Confirming converts the hold into an appointment.
+
+**Alternatives considered:**
+
+- *No hold at all.* The patient completes the symptom form and is rejected at the
+  final step. Correct, and terrible.
+- *Redis with a TTL,* the conventional answer. Expiry is automatic and lookups are
+  fast. Rejected for two reasons: it adds infrastructure to a free-tier deployment,
+  and more importantly it puts the hold and the appointment in **different systems**,
+  so converting one to the other can no longer be one atomic transaction. That
+  reintroduces the exact failure the design is meant to remove — a hold released with
+  no appointment created, or an appointment created against a hold someone else took.
+- *An in-memory lock in the Node process.* Impossible on serverless: each instance
+  has its own memory, so the lock is invisible to the others.
+
+**Why chosen:** the same database that arbitrates the booking arbitrates the hold, so
+Step 18 can do both in one transaction. The exclusivity guarantee is identical — a
+unique constraint — and no new infrastructure is involved.
+
+**Trade-off accepted, stated honestly:** Postgres has no TTL, so expiry is ours to
+implement. A row whose `expiresAt` has passed still occupies the unique key and would
+lock the slot permanently. Handled twice over: lazily inside `createHold`, and by a
+sweep in the Step 37 cron. Lazy expiry alone only reclaims slots someone retries; a
+slot nobody retries would stay invisible.
+
+**Scale-up path:** at a volume where hold churn becomes a write-throughput problem,
+Redis with a TTL is the right move — paired with making the hold-to-appointment
+conversion idempotent, since it would no longer be transactional.
+
+**Why the constraint is plain rather than partial, unlike D29:** an appointment is a
+medical record and cancelled rows are kept forever, so its index must exclude them. A
+hold carries no history and is deleted outright, so nothing lingers in the key.
+
+---
+
+## D34 — One live hold per patient, released implicitly on re-selection
+
+**Decision:** `createHold` deletes the patient's existing holds before inserting the
+new one, in the same transaction.
+
+**Alternatives considered:** allowing several concurrent holds, which matches a
+patient comparing two times before deciding. Rejected: an authenticated user could
+then hold every slot a doctor has for ten minutes at a time and make the doctor
+unbookable — a denial of service requiring no privileges and leaving no obviously
+malicious trace.
+
+**Why chosen:** it matches the real interaction (choosing a new time abandons the
+previous one) and caps the damage any single account can do without needing rate
+limiting or abuse detection.
+
+**Trade-off accepted:** a patient cannot hold two candidate slots while deciding, and
+booking for a family member from one account means doing so sequentially. Acceptable
+for a clinic; a system needing multi-slot holds would cap the count instead of
+forcing one.
+
+**Related choice:** re-holding a slot the caller already holds returns the existing
+hold rather than a 409. A double-click is not an error, and treating it as one would
+teach patients that the button is unreliable.
