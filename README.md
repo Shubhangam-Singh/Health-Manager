@@ -114,6 +114,10 @@ After `npm run seed`:
 | Patient | `asha@example.test` | `patient12345` |
 | Patient | `rohit@example.test` / `meera@example.test` | `patient12345` |
 
+To receive real emails, register a patient account with an address you own —
+booking confirmations, cancellations and medication reminders are sent to whatever
+address the account holds.
+
 **Suggested 2-minute walkthrough**
 
 1. Sign in as `asha@example.test` → **Find a doctor** → pick Dr Mehta.
@@ -488,10 +492,11 @@ Stated plainly rather than hidden.
 - **No reschedule flow.** Cancel and rebook.
 - **Last-write-wins on concurrent schedule edits.** Two admins editing one doctor's
   week simultaneously need optimistic locking via a version column.
-- **The UI is deliberately plain.** Effort went into concurrency, reliability and
-  failure handling.
-- **Single light theme.** The app pins `color-scheme: light` rather than half-support
-  dark mode.
+- **Single light theme.** The app pins `color-scheme: light` rather than
+  half-supporting dark mode, which would mean auditing every colour class.
+- **Emails are marked `SENT` when SMTP accepts them,** which is not the same as
+  delivery. A bounce arrives asynchronously and is not currently fed back into the
+  notification row.
 
 ---
 
