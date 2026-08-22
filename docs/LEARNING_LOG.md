@@ -666,3 +666,60 @@ at 15-minute spacing, with nothing overrunning the 11:00 close.
 **Verified:** search lists 4 doctors, `?q=derm` narrows to Dr Anita Rao, an
 unauthenticated request redirects to `/login`, the slots API returns 400 for a
 malformed date, 404 for an unknown doctor, and 401 with no session.
+
+---
+
+## Step 14 — Watching it double-book (the bug, deliberately unfixed)
+
+**Built:** the `Appointment` model, a naive check-then-insert booking service,
+`POST /api/appointments`, and `scripts/race-test.ts`. Phase 3 begins.
+
+**Concepts that appeared:**
+
+- **A race condition is two things happening in an order nobody planned for.**
+  The booking flow is: read availability, check the slot is free, insert. Between
+  the read and the insert there is a gap of real milliseconds in which another
+  request can run its own read, get the same answer, and insert too.
+- **TOCTOU again** — time of check to time of use, the same flaw as the email check
+  in Step 6. The check is truthful when made and stale by the time it is used.
+- **No amount of application code closes it.** Re-checking just before the insert
+  only narrows the window. The gap is *between* statements, not inside one, so there
+  is no last line of JavaScript that fixes it.
+- **An index is not a constraint.** `@@index([doctorId, startAt])` makes lookups
+  fast. It does not make them exclusive. This distinction is the whole step.
+- **`onDelete: Restrict` on Appointment, not Cascade.** Appointments are medical
+  records and must outlive a doctor's employment, so Postgres refuses the delete
+  rather than removing history. This answers the question Step 10 raised: the third
+  option beyond cascade and error is a soft delete, which is what `deleteDoctor`
+  becomes.
+- **Cancelled appointments do not block their slot.** `getAvailableSlots` filters to
+  `PENDING` and `CONFIRMED`, so a cancellation frees the time again. That is exactly
+  the reasoning that makes the Step 15 index *partial*.
+- **`patientId` comes from the session, never the request body.** Accepting it from
+  the body would let anyone book in someone else's name — the same class of bug as
+  the `role` mass assignment in Step 6.
+- **The day query is bounded by a `startAt` range** so the `(doctorId, startAt)`
+  index is used, rather than fetching a doctor's whole history to find one day.
+
+**THE RESULT — 10 simultaneous requests at one slot:**
+
+```
+  HTTP 201 × 8
+  HTTP 409 × 2
+  rows in the database for that slot: 8
+```
+
+Eight different patients booked the same twenty-minute appointment. The creation
+timestamps span **51 milliseconds** — 01:31:57.783 through 01:31:57.834. That number
+is the race window, measured rather than imagined.
+
+The two that returned 409 were simply slow enough that a row existed by the time they
+checked. That is the naive code "working", and it is pure luck of timing.
+
+**What this looks like in the real world:** eight people arrive at the clinic at
+09:00 on Monday for the same appointment. The system told every one of them it was
+confirmed.
+
+**Deliberately not fixed.** The broken implementation is committed as its own step so
+the history shows the problem before the solution. Step 15 fixes it in the database,
+which is the only place it can be fixed.
