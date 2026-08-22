@@ -27,6 +27,7 @@ model User {
   /// simply has none -- the absence itself signals "not a doctor".
   doctorProfile DoctorProfile?
   appointments  Appointment[]
+  slotHolds     SlotHold[]
 
   @@index([role])
 }
@@ -64,6 +65,7 @@ model DoctorProfile {
   workingHours WorkingHour[]
   leaveDays    LeaveDay[]
   appointments Appointment[]
+  slotHolds    SlotHold[]
 
   /// Patients search by specialisation, so it earns an index.
   @@index([specialisation])
@@ -161,4 +163,40 @@ enum CancelReason {
   DOCTOR_LEAVE
   ADMIN
   HOLD_EXPIRED
+}
+
+/// A short-lived reservation taken when a patient selects a slot, so they can
+/// fill in the symptom form without losing it. Converted to an Appointment on
+/// confirm (Step 18), or left to expire.
+///
+/// CONTRAST WITH Appointment: that table keeps cancelled rows forever (medical
+/// records), which is why its unique index is PARTIAL. A hold is ephemeral --
+/// it is deleted, never archived -- so a plain unique constraint is right here.
+model SlotHold {
+  id String @id @default(cuid())
+
+  doctorId String
+  doctor   DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  patientId String
+  patient   User   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  startAt DateTime
+  endAt   DateTime
+
+  /// When this reservation lapses. A row whose expiresAt has passed is dead
+  /// but still present, and still occupies the unique key -- so it MUST be
+  /// deleted before that slot can be held again. Cleaned lazily on read and by
+  /// the cron job in Step 37.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  /// Exclusivity: one live hold per doctor per start time. This is what makes
+  /// two patients unable to hold the same slot.
+  @@unique([doctorId, startAt])
+  /// The cleanup job sweeps by expiry.
+  @@index([expiresAt])
+  /// "Does this patient already hold something?"
+  @@index([patientId])
 }

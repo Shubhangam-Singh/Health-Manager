@@ -52,14 +52,25 @@ export async function getAvailableSlots(
     select: { startAt: true },
   });
 
+  const held = await prisma.slotHold.findMany({
+    where: {
+      doctorId,
+      startAt: { gte: dayStart, lt: dayEnd },
+      expiresAt: { gt: now },
+    },
+    select: { startAt: true },
+  });
+
   return generateSlots({
     date,
     timezone: doctor.timezone,
     slotDurationMin: doctor.slotDurationMin,
     workingHours: doctor.workingHours,
     leaveDates: doctor.leaveDays.map((l) => isoDateInZone(l.date, "UTC")),
-    // TODO(step 17): unexpired slot holds also make a start time busy.
-    busyStarts: booked.map((b) => b.startAt),
+    // Live holds block a slot exactly as a booking does. Expired ones are
+    // filtered out here rather than deleted -- a read path should not write.
+    // Deletion happens in createHold and in the cleanup cron.
+    busyStarts: [...booked.map((b) => b.startAt), ...held.map((h) => h.startAt)],
     now,
     minNoticeMinutes: 30,
   });
