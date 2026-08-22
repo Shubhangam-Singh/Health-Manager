@@ -904,3 +904,86 @@ others: yes" when the slot had in fact become *visible* — the label was invert
 passing test read as though it were asserting the opposite. Corrected to "once
 expired, slot reappears in availability". A test whose output misdescribes what it
 checked is worse than no test.
+
+---
+
+## Steps 18–21 — Booking transaction, symptom form, LLM integration
+
+> Built as a batch at Shubhangam's request. **Revisit before the interview** —
+> Step 18 underpins graded problem 4 and Steps 20–21 are the LLM failure handling,
+> both explicitly on the grading list.
+
+### Step 18 — the booking transaction
+
+- **One `prisma.$transaction` does four things or none:** verify hold ownership and
+  expiry, delete the hold, create the appointment, queue notification rows.
+- **THE GOLDEN RULE: no network I/O inside a transaction.** No email is sent and no
+  calendar API is called there. Sending inside would mean a mail server hiccup
+  **rolls back a valid appointment**, and it holds a database connection open for
+  however long the network takes.
+- **The outbox pattern in miniature.** The transaction writes `Notification` rows
+  with `status: PENDING`. A worker delivers them later. The appointment commits
+  whether or not email works.
+- **`idempotencyKey` is deterministic** — `booking-confirmed:{appointmentId}:patient`
+  — so retrying a booking can never queue a second copy of the same email.
+- **The payload is captured at write time,** not re-queried at send time, so editing
+  an appointment later cannot change the contents of an already-queued message.
+- An expired hold gets its own message: the patient did nothing wrong, their time
+  ran out.
+
+### Step 19 — symptom form gated by a hold
+
+- **The form is written in the same transaction as the appointment,** so there can
+  never be an appointment without symptoms, nor a form orphaned by an abandoned
+  booking.
+- **Two gates, deliberately.** `/patient/book` redirects away without a live hold,
+  *and* the booking transaction re-checks. The UI check is a courtesy to honest
+  users; the transaction check is the rule — a hold can expire between render and
+  submit.
+- **`SlotPicker` is the first real client island** — the answer to the question asked
+  back in Step 2. The page stays a Server Component that queries Postgres; only the
+  clickable grid ships JavaScript. Dates cross the boundary as ISO strings, because
+  only JSON-serialisable values may be passed as props.
+- **`listPatientAppointments` scopes by `patientId` in the query itself.** Resource
+  ownership enforced in the WHERE clause is much harder to get wrong than a
+  conditional after the fetch.
+
+### Step 20 — the Gemini client
+
+- **`AbortController` is what actually stops a request.** Without it `fetch` can hang
+  far longer than any nominal timeout. 15 seconds here.
+- **One retry, and only for 5xx or 429.** A 4xx means our request is wrong, so
+  retrying just sends the same wrong request. A missing API key is a config error and
+  is never retried.
+- **The client returns a discriminated union rather than throwing,** because "the
+  model did not answer" is a normal outcome the caller must handle, not an exception.
+- **Temperature 0.2** — this is extraction, not creative writing.
+- **Prompts are versioned exported constants,** and every summary stores its
+  `promptVersion`, so when output quality changes you can tell whether the model
+  moved or the prompt did.
+- **The assignment's baseline prompt was kept and improved:** explicit role, exact
+  JSON schema with key names, a no-markdown-fences instruction, enum spellings that
+  match what is stored, length caps, a do-not-diagnose safety boundary, structured
+  context fields rather than prose alone, and an explicit rule against inventing
+  detail the patient never reported.
+
+### Step 21 — validation and the three states
+
+- **Prompting for a shape is a request, not a guarantee.** Models wrap JSON in
+  ```json fences, add a sentence before it, return `"high"` instead of `"HIGH"`,
+  invent extra keys, or apologise instead of answering.
+- `parseModelJson` strips fences and surrounding prose, then zod validates. **12 unit
+  tests cover exactly those failure modes.**
+- **Three states: PENDING | READY | FAILED.** The PENDING row is created inside the
+  booking transaction so a doctor can tell "not ready yet" from "nobody tried".
+- **`rawModelOutput` is stored on failure** — you cannot fix a prompt whose output you
+  cannot see.
+- **Generation never blocks booking.** It runs in `after()`, once the response is
+  flushed. **Measured: booking returned in 1062 ms while the LLM timeout is
+  15 000 ms.**
+- **Regeneration checks resource ownership, not just role.** Being a doctor is not
+  enough — it must be *this appointment's* doctor.
+
+**Failure path verified with no API key set:** booking 201, appointment CONFIRMED,
+symptom form stored, summary `FAILED` with `lastError: "GEMINI_API_KEY is not set"`.
+Nothing crashed and the appointment is real.

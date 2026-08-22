@@ -947,3 +947,87 @@ forcing one.
 **Related choice:** re-holding a slot the caller already holds returns the existing
 hold rather than a 409. A double-click is not an error, and treating it as one would
 teach patients that the button is unreliable.
+
+---
+
+## D35 — The business transaction writes an outbox row; nothing is sent inside it
+
+**Decision:** `bookFromHold` runs one transaction that deletes the hold, creates the
+appointment, writes the symptom form and a PENDING summary row, and queues
+`Notification` rows. No email, no calendar call, no LLM request happens inside it.
+
+**Alternatives considered:** sending the confirmation email inside the transaction,
+which is the obvious reading of "book and confirm". It has two failure modes, both
+unacceptable. If the send fails, the transaction rolls back and a patient who saw a
+confirmation has no appointment. If the mail server merely hangs, a database
+connection is held for the duration — on a pooled free tier that is a slow-motion
+outage.
+
+Sending *after* commit without recording intent is no better: a crash between the two
+loses the notification with nothing to show it was ever owed.
+
+**Why chosen:** the outbox makes "we owe this person an email" a **database fact**
+committed atomically with the thing that caused it. Delivery becomes a separate,
+retryable concern.
+
+**Trade-off accepted:** email is no longer immediate — it waits for the next worker
+run, up to five minutes. For a booking confirmation that is invisible; for a
+one-time passcode it would not be, and that would justify a different design.
+
+**Interview line:** never do network I/O inside a database transaction.
+
+---
+
+## D36 — LLM generation runs after the response and can only ever degrade
+
+**Decision:** the summary row is created `PENDING` inside the booking transaction;
+generation runs in `after()` once the response is flushed. `generatePreVisitSummary`
+never throws. Failure produces a `FAILED` row with `lastError` and `rawModelOutput`.
+
+**Alternatives considered:** generating inline before responding, which is simplest
+and makes every booking wait on a third-party model — up to the 15-second timeout —
+and turns a Gemini outage into a booking outage. Or generating lazily when the doctor
+first opens the appointment, which shifts the wait onto the person with the least
+patience for it.
+
+**Why chosen:** an appointment is a commitment between two people; a summary is
+convenience. The convenience must never jeopardise the commitment. Measured: booking
+returned in 1062 ms against a 15 000 ms model timeout.
+
+**Why a PENDING row rather than no row:** absence is ambiguous. A row that says
+PENDING distinguishes "still working" from "nobody ever tried", which matters when
+diagnosing why a doctor has no summary.
+
+**Trade-off accepted:** `after()` is best-effort. If the serverless instance is torn
+down immediately, generation may not run and the row stays PENDING — which is why the
+regenerate endpoint exists and why a cron sweep for stale PENDING rows is the right
+backstop.
+
+---
+
+## D37 — Model output is validated with zod, and failures are stored, not thrown
+
+**Decision:** responses are stripped of fences and surrounding prose, `JSON.parse`d,
+then validated against a zod schema. Anything that fails becomes a `FAILED` row
+holding the raw output.
+
+**Alternatives considered:** trusting `responseMimeType: "application/json"` to
+guarantee valid JSON. It helps and is set — and it is a vendor's best effort, not a
+contract, and says nothing about whether the *fields* are right. Or `JSON.parse` with
+a `try/catch` and no schema, which catches malformed syntax while letting
+`urgency: "critical"` through to be rendered as an unknown badge.
+
+**Why chosen:** the twelve unit tests are drawn from failure modes models actually
+exhibit — code fences, a chatty preamble, lowercase enum values, invented enum
+values, missing fields, truncated output, an apology instead of JSON, empty arrays,
+and extra keys. Each of these would otherwise reach a doctor as broken or, worse,
+wrong information.
+
+Extra keys are stripped rather than rejected, and 4 questions are accepted where 3
+were requested: rejecting an otherwise good summary over an off-by-one serves nobody.
+Enum casing is *not* forgiven, because silently normalising `"high"` hides that the
+prompt is drifting.
+
+**Trade-off accepted:** storing `rawModelOutput` keeps model text containing patient
+symptoms in a second column. Justified because a prompt cannot be debugged from a
+validation error alone, and it is the same data already stored in `SymptomForm`.
