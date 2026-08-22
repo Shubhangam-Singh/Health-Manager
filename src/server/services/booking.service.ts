@@ -3,6 +3,7 @@ import { AppError } from "@/server/lib/errors";
 import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { getAvailableSlots, isoDateInZone } from "./slot.service";
 import type { SymptomFormInput } from "@/server/validation/symptom.schema";
+import { queueCalendarEvents } from "./calendar.service";
 
 /**
  * Booking, with the guarantee where it belongs: in the database.
@@ -169,6 +170,14 @@ export async function bookFromHold(input: {
             idempotencyKey: `booking-confirmed:${appointment.id}:doctor`,
           },
         ],
+      });
+
+      // Queued, not called. A Google outage leaves a PENDING row to retry;
+      // it can never fail the booking.
+      await queueCalendarEvents(tx, {
+        appointmentId: appointment.id,
+        patientUserId: hold.patientId,
+        doctorUserId: hold.doctor.user.id,
       });
 
       return appointment;

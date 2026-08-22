@@ -28,6 +28,10 @@ export default async function PatientDashboard() {
           className="ml-2 inline-block rounded border border-gray-300 px-4 py-2 text-sm">
           My appointments
         </Link>
+        <Link href="/patient/calendar"
+          className="ml-2 inline-block rounded border border-gray-300 px-4 py-2 text-sm">
+          Google Calendar
+        </Link>
       </div>
     </main>
   );

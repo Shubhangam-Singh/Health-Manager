@@ -3,6 +3,7 @@ import { AppError } from "@/server/lib/errors";
 import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { queueNotification } from "./notification.service";
 import { getAvailableSlots } from "./slot.service";
+import { queueCalendarDeletion } from "./calendar.service";
 
 export type AffectedAppointment = {
   id: string;
@@ -145,6 +146,9 @@ export async function applyLeave(input: {
           // Deterministic: re-running this can never send a second email.
           idempotencyKey: `leave-cancel:${a.id}`,
         });
+
+        // The event must disappear from both calendars too.
+        await queueCalendarDeletion(tx, a.id);
       }
 
       if (conflicts.affected.length > 0) {

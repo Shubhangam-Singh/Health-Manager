@@ -27,8 +27,10 @@ model User {
   /// simply has none -- the absence itself signals "not a doctor".
   doctorProfile DoctorProfile?
   appointments  Appointment[]
-  slotHolds     SlotHold[]
-  notifications Notification[]
+  slotHolds      SlotHold[]
+  notifications  Notification[]
+  googleAccount  GoogleAccount?
+  calendarEvents CalendarEvent[]
 
   @@index([role])
 }
@@ -148,6 +150,7 @@ model Appointment {
   symptomForm      SymptomForm?
   preVisitSummary  PreVisitSummary?
   visitNote        VisitNote?
+  calendarEvents   CalendarEvent[]
   prescription     Prescription?
   postVisitSummary PostVisitSummary?
 
@@ -431,4 +434,62 @@ model PostVisitSummary {
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+/// Google OAuth tokens, kept SEPARATE from login.
+///
+/// Signing in to this app and authorising it to write to your Google Calendar
+/// are different grants: one proves who you are, the other delegates a
+/// capability. A user can revoke calendar access without losing their account,
+/// and most users never connect a calendar at all.
+model GoogleAccount {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Long-lived. THE high-value secret here: it can mint new access tokens
+  /// indefinitely until the user revokes it. Encrypted at rest in production
+  /// (see README); stored plainly here, which is a documented limitation.
+  refreshToken String
+  accessToken  String?
+  expiresAt    DateTime? @db.Timestamptz(3)
+  scope        String?
+  googleEmail  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+/// One Google Calendar event per (appointment, user). Patient and doctor each
+/// get their own event in their own calendar, so they are separate rows.
+model CalendarEvent {
+  id String @id @default(cuid())
+
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Google's id for the event. Needed to update or delete it later.
+  googleEventId String?
+  status        CalendarEventStatus @default(PENDING)
+  attempts      Int                 @default(0)
+  lastError     String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  /// One event per person per appointment; also makes retries idempotent.
+  @@unique([appointmentId, userId])
+  @@index([status])
+}
+
+enum CalendarEventStatus {
+  PENDING     // queued, not yet created in Google
+  SYNCED      // exists in Google
+  DELETE_PENDING // must be removed from Google
+  DELETED     // removed
+  FAILED      // gave up; visible to an admin
 }
