@@ -26,6 +26,7 @@ model User {
   /// Only present when role = DOCTOR. Optional on this side, so a patient row
   /// simply has none -- the absence itself signals "not a doctor".
   doctorProfile DoctorProfile?
+  appointments  Appointment[]
 
   @@index([role])
 }
@@ -62,6 +63,7 @@ model DoctorProfile {
 
   workingHours WorkingHour[]
   leaveDays    LeaveDay[]
+  appointments Appointment[]
 
   /// Patients search by specialisation, so it earns an index.
   @@index([specialisation])
@@ -111,4 +113,52 @@ model LeaveDay {
   /// A doctor cannot be on leave twice for the same date. The database
   /// enforces it, so a double-submit cannot create duplicates.
   @@unique([doctorId, date])
+}
+
+/// A booked appointment. NOTE: at Step 14 this table has NO protection against
+/// two rows sharing (doctorId, startAt). That gap is deliberate and is fixed by
+/// a partial unique index in Step 15.
+model Appointment {
+  id String @id @default(cuid())
+
+  doctorId String
+  /// Restrict, NOT Cascade. Deleting a doctor must never delete appointments --
+  /// they are medical records and outlive the doctor's employment. Postgres
+  /// refuses the delete instead, and the service turns that into a 409.
+  doctor   DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+
+  patientId String
+  patient   User   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  /// UTC instant. The clinic's wall-clock time lives in WorkingHour; this is
+  /// the real point in time that slot resolved to.
+  startAt DateTime
+  endAt   DateTime
+
+  status       AppointmentStatus @default(CONFIRMED)
+  cancelReason CancelReason?
+  cancelledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Availability lookups: "what does this doctor have booked on this day?"
+  @@index([doctorId, startAt])
+  /// The patient's own list of appointments.
+  @@index([patientId, startAt])
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum CancelReason {
+  PATIENT_REQUEST
+  DOCTOR_LEAVE
+  ADMIN
+  HOLD_EXPIRED
 }
