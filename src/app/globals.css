@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
+/*
+ * SINGLE LIGHT THEME, deliberately.
+ *
+ * create-next-app ships a `prefers-color-scheme: dark` block that flips
+ * --foreground to near-white. Every card in this app is an explicit
+ * `bg-white` with `text-gray-*` content, so on a machine set to dark mode the
+ * inherited body colour turned form labels and headings near-white ON a white
+ * card -- invisible text on the login and register pages.
+ *
+ * Supporting both themes properly would mean auditing every colour class in
+ * the app. The UI is not what this project is graded on, so the theme is
+ * pinned to light and made explicit instead. `color-scheme: light` also stops
+ * the browser rendering native form controls and scrollbars in dark colours.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -12,15 +27,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+
+/* Placeholders were inheriting a colour with almost no contrast on white. */
+::placeholder {
+  color: #9ca3af; /* gray-400 */
+  opacity: 1;
 }
