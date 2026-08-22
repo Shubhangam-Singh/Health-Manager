@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BTN } from "./ui";
 
 export default function RegenerateSummary({ appointmentId }: { appointmentId: string }) {
   const router = useRouter();
@@ -27,10 +28,10 @@ export default function RegenerateSummary({ appointmentId }: { appointmentId: st
   return (
     <div className="mt-3">
       <button onClick={run} disabled={pending}
-        className="rounded border border-gray-300 px-3 py-1 text-sm hover:border-black disabled:opacity-50">
+        className={BTN.secondary}>
         {pending ? "Generating…" : "Regenerate summary"}
       </button>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-xs text-[var(--danger)]">{error}</p>}
     </div>
   );
 }

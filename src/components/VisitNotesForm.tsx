@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { INPUT, BTN } from "./ui";
 
 const FREQUENCIES = [
   ["ONCE_DAILY", "Once a day"],
@@ -56,7 +57,7 @@ export default function VisitNotesForm({ appointmentId }: { appointmentId: strin
     router.refresh();
   }
 
-  const input = "w-full rounded border border-gray-300 px-3 py-2 text-sm";
+  const input = INPUT;
 
   return (
     <form onSubmit={onSubmit} className="mt-3 space-y-3">
@@ -67,9 +68,9 @@ export default function VisitNotesForm({ appointmentId }: { appointmentId: strin
         <input name="followUpDays" type="number" min={0} placeholder="Follow-up in days" className="w-48 rounded border border-gray-300 px-3 py-2 text-sm" />
       </div>
 
-      <div className="rounded border border-gray-200 p-3">
+      <div className="rounded-[8px] border border-[var(--border)] bg-gray-50 p-4">
         <p className="text-sm font-semibold">Prescription</p>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
           Frequency and duration are structured, because medication reminders are
           computed from them.
         </p>
@@ -90,15 +91,15 @@ export default function VisitNotesForm({ appointmentId }: { appointmentId: strin
           </div>
         ))}
         <button type="button" onClick={() => setMeds((m) => [...m, blank()])}
-          className="mt-3 rounded border border-gray-300 px-3 py-1 text-xs">+ Add medication</button>
+          className={`${BTN.secondary} mt-3 px-3 py-1.5 text-xs`}>+ Add medication</button>
       </div>
 
       <input name="prescriptionNotes" placeholder="Prescription notes (optional)" className={input} />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="rounded-[8px] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">{error}</p>}
 
       <button type="submit" disabled={pending}
-        className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">
+        className={`${BTN.primary} w-full`}>
         {pending ? "Saving…" : "Save notes and prescription"}
       </button>
     </form>

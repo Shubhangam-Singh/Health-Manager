@@ -56,6 +56,7 @@ export async function createDoctor(input: CreateDoctorInput) {
 const doctorInclude = {
   user: { select: { id: true, email: true, name: true, phone: true } },
   workingHours: { orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }] },
+  leaveDays: { orderBy: { date: "asc" } },
 } satisfies Prisma.DoctorProfileInclude;
 
 /** Filtering happens in SQL, never by fetching everything and filtering in JS. */

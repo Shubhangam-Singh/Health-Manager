@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { INPUT, BTN, Field } from "./ui";
 
 export default function LoginForm({ initialError }: { initialError?: string }) {
   const router = useRouter();
@@ -11,48 +12,61 @@ export default function LoginForm({ initialError }: { initialError?: string }) {
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); // stop the browser's own full-page form POST
+    e.preventDefault();
     setPending(true);
     setError(null);
 
     const form = new FormData(e.currentTarget);
-    // redirect:false => we handle the outcome ourselves instead of letting
-    // Auth.js bounce the page and lose whatever the user typed.
+    // redirect:false so a failure renders inline instead of reloading the page
+    // and discarding whatever the user typed.
     const res = await signIn("credentials", {
       email: form.get("email"),
       password: form.get("password"),
       redirect: false,
     });
-
     setPending(false);
 
     if (res?.error) {
-      // Deliberately vague: never reveal whether the email exists (see D17).
+      // Deliberately vague: never reveal whether the email exists (D17).
       setError("Invalid email or password");
       return;
     }
-
-    router.push("/"); // "/" decides which portal, on the server
-    router.refresh(); // discard cached logged-out server content
+    router.push("/");   // "/" routes by role, on the server
+    router.refresh();   // drop cached logged-out server content
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <input name="email" type="email" required placeholder="Email"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-      <input name="password" type="password" required placeholder="Password"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
+    <>
+      <h1 className="text-lg font-semibold tracking-tight">Sign in</h1>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">Welcome back.</p>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <form onSubmit={onSubmit} className="mt-5 space-y-4">
+        <Field label="Email">
+          <input name="email" type="email" required autoComplete="email"
+            placeholder="you@example.com" className={INPUT} />
+        </Field>
+        <Field label="Password">
+          <input name="password" type="password" required autoComplete="current-password"
+            placeholder="••••••••" className={INPUT} />
+        </Field>
 
-      <button type="submit" disabled={pending}
-        className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
+        {error && (
+          <p className="rounded-[8px] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+            {error}
+          </p>
+        )}
 
-      <p className="text-center text-xs text-gray-500">
-        No account? <Link href="/register" className="underline">Register</Link>
+        <button type="submit" disabled={pending} className={`${BTN.primary} w-full`}>
+          {pending ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+
+      <p className="mt-5 text-center text-sm text-[var(--text-muted)]">
+        No account?{" "}
+        <Link href="/register" className="font-medium text-[var(--brand)] hover:underline">
+          Create one
+        </Link>
       </p>
-    </form>
+    </>
   );
 }

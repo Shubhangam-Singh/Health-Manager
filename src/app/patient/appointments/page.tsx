@@ -1,97 +1,109 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { listPatientAppointments } from "@/server/services/booking.service";
-
-const BADGE: Record<string, string> = {
-  CONFIRMED: "bg-green-100 text-green-800",
-  PENDING: "bg-yellow-100 text-yellow-800",
-  CANCELLED: "bg-red-100 text-red-800",
-  COMPLETED: "bg-gray-100 text-gray-700",
-  NO_SHOW: "bg-gray-100 text-gray-700",
-};
+import { Card, CardBody, PageHeader, ButtonLink, StatusBadge, EmptyState, Badge } from "@/components/ui";
 
 export default async function PatientAppointmentsPage() {
   const session = await auth();
   const appointments = await listPatientAppointments(session!.user.id);
 
   return (
-    <main className="mx-auto max-w-2xl p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">My appointments</h1>
-        <Link href="/patient/doctors" className="text-sm underline">Book another →</Link>
-      </div>
+    <>
+      <PageHeader
+        title="My appointments"
+        subtitle="Everything booked, past and upcoming."
+        action={<ButtonLink href="/patient/doctors">Book another</ButtonLink>}
+      />
 
       {appointments.length === 0 && (
-        <p className="mt-6 text-sm text-gray-500">No appointments yet.</p>
+        <EmptyState
+          title="No appointments yet"
+          hint="Find a doctor by specialisation and pick a time."
+          action={<ButtonLink href="/patient/doctors">Find a doctor</ButtonLink>}
+        />
       )}
 
-      <ul className="mt-6 space-y-3">
+      <div className="space-y-4">
         {appointments.map((a) => {
           const fmt = new Intl.DateTimeFormat("en-GB", {
-            timeZone: a.doctor.timezone, weekday: "short", day: "numeric",
-            month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+            timeZone: a.doctor.timezone, weekday: "short", day: "numeric", month: "short",
+            hour: "2-digit", minute: "2-digit", hour12: false,
           });
+          const post = a.postVisitSummary;
+
           return (
-            <li key={a.id} className="rounded border border-gray-200 p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold">{a.doctor.user.name}</p>
-                  <p className="text-sm text-gray-600">{a.doctor.specialisation}</p>
-                  <p className="mt-1 text-sm">{fmt.format(a.startAt)}</p>
+            <Card key={a.id}>
+              <CardBody>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{a.doctor.user.name}</p>
+                    <p className="text-sm text-[var(--text-muted)]">{a.doctor.specialisation}</p>
+                    <p className="mt-1 text-sm tabular-nums">{fmt.format(a.startAt)}</p>
+                  </div>
+                  <StatusBadge status={a.status} />
                 </div>
-                <span className={`rounded px-2 py-1 text-xs ${BADGE[a.status] ?? ""}`}>
-                  {a.status}
-                </span>
-              </div>
-              {a.symptomForm && (
-                <p className="mt-3 border-t pt-2 text-sm text-gray-600">
-                  <span className="text-gray-400">Reported: </span>
-                  {a.symptomForm.rawText.slice(0, 140)}
-                  {a.symptomForm.rawText.length > 140 ? "…" : ""}
-                  <span className="text-gray-400"> · severity {a.symptomForm.severity}/10</span>
-                </p>
-              )}
 
-              {/* AFTER THE VISIT. Three states again: READY shows the plain
-                  English summary, PENDING says it is coming, FAILED still
-                  shows the prescription, which is the part that matters. */}
-              {a.postVisitSummary?.status === "READY" && (
-                <div className="mt-3 rounded bg-gray-50 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">After your visit</p>
-                  <p className="mt-1 text-gray-800">{a.postVisitSummary.patientFriendlyText}</p>
-                  {a.postVisitSummary.medicationSchedule && (
-                    <p className="mt-2 text-gray-700">
-                      <span className="text-gray-400">Medication: </span>
-                      {a.postVisitSummary.medicationSchedule}
+                {a.symptomForm && (
+                  <div className="mt-4 border-t border-[var(--border)] pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+                      What you reported
                     </p>
-                  )}
-                  {a.postVisitSummary.followUpSteps.length > 0 && (
-                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-gray-700">
-                      {a.postVisitSummary.followUpSteps.map((f, i) => <li key={i}>{f}</li>)}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {a.postVisitSummary?.status === "PENDING" && (
-                <p className="mt-3 text-sm text-gray-400">Your visit summary is being prepared…</p>
-              )}
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      {a.symptomForm.rawText.slice(0, 180)}
+                      {a.symptomForm.rawText.length > 180 ? "…" : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-subtle)]">
+                      severity {a.symptomForm.severity}/10 · {a.symptomForm.durationDays} day(s)
+                    </p>
+                  </div>
+                )}
 
-              {a.prescription && a.prescription.items.length > 0 && (
-                <div className="mt-3 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Prescription</p>
-                  <ul className="mt-1 space-y-0.5 text-gray-700">
-                    {a.prescription.items.map((m) => (
-                      <li key={m.id}>
-                        <b>{m.drugName}</b> {m.dose} · {m.frequency.toLowerCase().replace(/_/g, " ")} · {m.durationDays} day(s)
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </li>
+                {/* Three states again. FAILED still shows the prescription,
+                    which is the part that actually matters. */}
+                {post?.status === "READY" && (
+                  <div className="mt-4 rounded-[8px] bg-[var(--brand-soft)]/40 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--brand-ink)]">
+                      After your visit
+                    </p>
+                    <p className="mt-1.5 text-sm leading-relaxed">{post.patientFriendlyText}</p>
+                    {post.medicationSchedule && (
+                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                        <span className="font-medium text-[var(--text)]">Medication: </span>
+                        {post.medicationSchedule}
+                      </p>
+                    )}
+                    {post.followUpSteps.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--text-muted)]">
+                        {post.followUpSteps.map((f, i) => <li key={i}>{f}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {post?.status === "PENDING" && (
+                  <p className="mt-4 text-sm text-[var(--text-subtle)]">Your visit summary is being prepared…</p>
+                )}
+
+                {a.prescription && a.prescription.items.length > 0 && (
+                  <div className="mt-4 border-t border-[var(--border)] pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+                      Prescription
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {a.prescription.items.map((m) => (
+                        <li key={m.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{m.drugName}</span>
+                          <span className="text-[var(--text-muted)]">{m.dose}</span>
+                          <Badge>{m.frequency.toLowerCase().replace(/_/g, " ")}</Badge>
+                          <span className="text-xs text-[var(--text-subtle)]">{m.durationDays} days</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
           );
         })}
-      </ul>
-    </main>
+      </div>
+    </>
   );
 }

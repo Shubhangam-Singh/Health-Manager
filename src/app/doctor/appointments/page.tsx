@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { listDoctorAppointments } from "@/server/services/appointment.service";
-
-const URGENCY: Record<string, string> = {
-  HIGH: "bg-red-100 text-red-800 border-red-300",
-  MEDIUM: "bg-amber-100 text-amber-800 border-amber-300",
-  LOW: "bg-green-100 text-green-800 border-green-300",
-};
+import { Card, CardBody, PageHeader, StatusBadge, UrgencyBadge, Badge, EmptyState } from "@/components/ui";
 
 export default async function DoctorAppointmentsPage() {
   const session = await auth();
@@ -17,63 +12,58 @@ export default async function DoctorAppointmentsPage() {
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
 
+  // High-urgency first within the list is tempting, but chronological order is
+  // what a clinic day actually looks like; urgency is signalled by colour.
   return (
-    <main className="mx-auto max-w-3xl p-8">
-      <h1 className="text-xl font-bold">My appointments</h1>
-      <p className="mt-1 text-sm text-gray-500">Times shown in {timezone}</p>
+    <>
+      <PageHeader title="Appointments" subtitle={`All times in ${timezone}`} />
 
       {appointments.length === 0 && (
-        <p className="mt-6 text-sm text-gray-500">No appointments booked yet.</p>
+        <EmptyState title="No appointments booked" hint="Patients will appear here as they book." />
       )}
 
-      <ul className="mt-6 space-y-3">
+      <div className="space-y-3">
         {appointments.map((a) => {
           const s = a.preVisitSummary;
           return (
-            <li key={a.id} className="rounded border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-semibold">{fmt.format(a.startAt)}</p>
-                  <p className="text-sm text-gray-600">{a.patient.name}</p>
+            <Card key={a.id}>
+              <CardBody>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm tabular-nums text-[var(--text-muted)]">{fmt.format(a.startAt)}</p>
+                    <p className="mt-0.5 font-medium">{a.patient.name}</p>
 
-                  {/* Chief complaint when we have one; otherwise say WHY not.
-                      Never render a blank space and leave the doctor guessing. */}
-                  {s?.status === "READY" && s.chiefComplaint ? (
-                    <p className="mt-1 truncate text-sm">{s.chiefComplaint}</p>
-                  ) : s?.status === "FAILED" ? (
-                    <p className="mt-1 text-sm text-gray-500">
-                      Summary unavailable — open to read the patient&apos;s own words
-                    </p>
-                  ) : a.symptomForm ? (
-                    <p className="mt-1 text-sm text-gray-400">Summary being prepared…</p>
-                  ) : (
-                    <p className="mt-1 text-sm text-gray-400">No symptom form submitted</p>
-                  )}
+                    {s?.status === "READY" && s.chiefComplaint ? (
+                      <p className="mt-1 text-sm">{s.chiefComplaint}</p>
+                    ) : s?.status === "FAILED" ? (
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">
+                        Summary unavailable — open to read the patient&apos;s own words
+                      </p>
+                    ) : a.symptomForm ? (
+                      <p className="mt-1 text-sm text-[var(--text-subtle)]">Summary being prepared…</p>
+                    ) : (
+                      <p className="mt-1 text-sm text-[var(--text-subtle)]">No symptom form submitted</p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {s?.status === "READY" && s.urgency && <UrgencyBadge urgency={s.urgency} />}
+                    <StatusBadge status={a.status} />
+                    {a.symptomForm && (
+                      <Badge>severity {a.symptomForm.severity}/10</Badge>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  {s?.status === "READY" && s.urgency && (
-                    <span className={`rounded border px-2 py-0.5 text-xs font-medium ${URGENCY[s.urgency]}`}>
-                      {s.urgency}
-                    </span>
-                  )}
-                  {a.symptomForm && (
-                    <span className="text-xs text-gray-400">
-                      severity {a.symptomForm.severity}/10
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-400">{a.status}</span>
-                </div>
-              </div>
-
-              <Link href={`/doctor/appointments/${a.id}`}
-                className="mt-3 inline-block text-sm underline">
-                Open →
-              </Link>
-            </li>
+                <Link href={`/doctor/appointments/${a.id}`}
+                  className="mt-3 inline-block text-sm font-medium text-[var(--brand)] hover:underline">
+                  Open patient →
+                </Link>
+              </CardBody>
+            </Card>
           );
         })}
-      </ul>
-    </main>
+      </div>
+    </>
   );
 }

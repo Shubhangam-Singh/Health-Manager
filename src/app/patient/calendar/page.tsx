@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/server/lib/prisma";
 import { isCalendarConfigured } from "@/server/lib/google-calendar";
+import { Card, CardBody, PageHeader, Alert, Badge, BTN } from "@/components/ui";
 import DisconnectCalendar from "@/components/DisconnectCalendar";
 
 type Props = { searchParams: Promise<{ connected?: string; error?: string }> };
@@ -17,58 +17,66 @@ export default async function CalendarPage({ searchParams }: Props) {
   const session = await auth();
   const account = await prisma.googleAccount.findUnique({
     where: { userId: session!.user.id },
-    select: { googleEmail: true, createdAt: true, scope: true },
+    select: { googleEmail: true, createdAt: true },
   });
   const configured = isCalendarConfigured();
 
   return (
-    <main className="mx-auto max-w-lg p-8">
-      <Link href="/patient/dashboard" className="text-sm underline">← Dashboard</Link>
-      <h1 className="mt-4 text-xl font-bold">Google Calendar</h1>
+    <div className="mx-auto max-w-2xl">
+      <PageHeader
+        title="Google Calendar"
+        subtitle="Optional. Appointments work with or without it."
+      />
 
-      {!configured && (
-        <p className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          Calendar integration is not configured on this server. Appointments still
-          work; they simply will not appear in Google Calendar.
-        </p>
-      )}
-
-      {connected && (
-        <p className="mt-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-900">
-          Connected. New bookings will be added to your calendar.
-        </p>
-      )}
-      {error && (
-        <p className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-          {ERRORS[error] ?? "Could not connect Google Calendar."}
-        </p>
-      )}
-
-      <section className="mt-6 rounded border border-gray-200 p-4">
-        {account ? (
-          <>
-            <p className="text-sm">
-              Connected{account.googleEmail ? ` as ${account.googleEmail}` : ""}.
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              We can add, update and remove events we created. We cannot read your
-              other calendar entries.
-            </p>
-            <DisconnectCalendar />
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-gray-600">
-              Connect your calendar and confirmed appointments will appear in it
-              automatically, and disappear if they are cancelled.
-            </p>
-            <a href="/api/google/connect"
-              className={`mt-3 inline-block rounded px-4 py-2 text-sm text-white ${configured ? "bg-black" : "pointer-events-none bg-gray-400"}`}>
-              Connect Google Calendar
-            </a>
-          </>
+      <div className="space-y-3">
+        {!configured && (
+          <Alert tone="warn">
+            Calendar integration is not configured on this server. Bookings still work —
+            they simply will not appear in Google Calendar.
+          </Alert>
         )}
-      </section>
-    </main>
+        {connected && <Alert tone="ok">Connected. New bookings will be added to your calendar.</Alert>}
+        {error && <Alert tone="danger">{ERRORS[error] ?? "Could not connect Google Calendar."}</Alert>}
+      </div>
+
+      <Card className="mt-4">
+        <CardBody>
+          {account ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">Connected</p>
+                  {account.googleEmail && (
+                    <p className="text-sm text-[var(--text-muted)]">{account.googleEmail}</p>
+                  )}
+                </div>
+                <Badge tone="ok">active</Badge>
+              </div>
+              <p className="mt-3 text-sm text-[var(--text-muted)]">
+                We can add, update and remove only the events we created. We cannot read
+                anything else in your calendar.
+              </p>
+              <DisconnectCalendar />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--text-muted)]">
+                Connect your calendar and confirmed appointments appear in it automatically,
+                and disappear again if they are cancelled.
+              </p>
+              <a href="/api/google/connect"
+                className={`mt-4 inline-flex ${configured ? BTN.primary : `${BTN.primary} pointer-events-none opacity-50`}`}>
+                Connect Google Calendar
+              </a>
+            </>
+          )}
+        </CardBody>
+      </Card>
+
+      <p className="mt-4 text-xs text-[var(--text-subtle)]">
+        Signing in and authorising calendar access are separate grants. Disconnecting here
+        removes our stored token; you can also revoke access at myaccount.google.com/permissions.
+      </p>
+    </div>
   );
 }

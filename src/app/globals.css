@@ -1,44 +1,61 @@
 @import "tailwindcss";
 
 /*
- * SINGLE LIGHT THEME, deliberately.
- *
- * create-next-app ships a `prefers-color-scheme: dark` block that flips
- * --foreground to near-white. Every card in this app is an explicit
- * `bg-white` with `text-gray-*` content, so on a machine set to dark mode the
- * inherited body colour turned form labels and headings near-white ON a white
- * card -- invisible text on the login and register pages.
- *
- * Supporting both themes properly would mean auditing every colour class in
- * the app. The UI is not what this project is graded on, so the theme is
- * pinned to light and made explicit instead. `color-scheme: light` also stops
- * the browser rendering native form controls and scrollbars in dark colours.
+ * Design tokens. One light theme, stated explicitly: create-next-app's
+ * prefers-color-scheme block turned body text near-white on our white cards.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
   color-scheme: light;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+
+  --text: #111827;
+  --text-muted: #667085;
+  --text-subtle: #98a2b3;
+
+  --brand: #0f766e;        /* teal-700 — calm, clinical, not corporate blue */
+  --brand-hover: #115e59;
+  --brand-soft: #ccfbf1;
+  --brand-ink: #134e4a;
+
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --warn: #b54708;
+  --warn-soft: #fffaeb;
+  --ok: #027a48;
+  --ok-soft: #ecfdf3;
+
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+  --shadow: 0 1px 3px rgba(16, 24, 40, .1), 0 1px 2px rgba(16, 24, 40, .06);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-html {
-  background: var(--background);
-}
+html { background: var(--bg); }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Placeholders were inheriting a colour with almost no contrast on white. */
-::placeholder {
-  color: #9ca3af; /* gray-400 */
-  opacity: 1;
+::placeholder { color: var(--text-subtle); opacity: 1; }
+
+/* Visible focus for keyboard users, on every interactive element. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
+
+/* Native controls should not look alien next to the styled ones. */
+input, select, textarea, button { font: inherit; }

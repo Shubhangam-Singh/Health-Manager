@@ -3,14 +3,9 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getDoctorAppointment } from "@/server/services/appointment.service";
 import { AppError } from "@/server/lib/errors";
+import { Card, CardBody, PageHeader, StatusBadge, UrgencyBadge, Badge, Alert } from "@/components/ui";
 import RegenerateSummary from "@/components/RegenerateSummary";
 import VisitNotesForm from "@/components/VisitNotesForm";
-
-const URGENCY: Record<string, string> = {
-  HIGH: "bg-red-100 text-red-800 border-red-300",
-  MEDIUM: "bg-amber-100 text-amber-800 border-amber-300",
-  LOW: "bg-green-100 text-green-800 border-green-300",
-};
 
 export default async function DoctorAppointmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,6 +15,8 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
   try {
     data = await getDoctorAppointment(session!.user.id, id);
   } catch (e) {
+    // Ownership lives in the QUERY, so another doctor's appointment simply does
+    // not match — indistinguishable from one that does not exist.
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
     throw e;
   }
@@ -35,127 +32,137 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
   });
 
   return (
-    <main className="mx-auto max-w-2xl p-8">
-      <Link href="/doctor/appointments" className="text-sm underline">← All appointments</Link>
+    <>
+      <Link href="/doctor/appointments" className="text-sm text-[var(--brand)] hover:underline">
+        ← All appointments
+      </Link>
 
-      <h1 className="mt-4 text-xl font-bold">{a.patient.name}</h1>
-      <p className="text-sm text-gray-600">{fmt.format(a.startAt)} · {a.status}</p>
-      <p className="text-sm text-gray-500">
-        {a.patient.email}{a.patient.phone ? ` · ${a.patient.phone}` : ""}
-      </p>
+      <div className="mt-4">
+        <PageHeader
+          title={a.patient.name}
+          subtitle={`${fmt.format(a.startAt)} · ${a.patient.email}${a.patient.phone ? ` · ${a.patient.phone}` : ""}`}
+          action={<StatusBadge status={a.status} />}
+        />
+      </div>
 
-      {/* ------------------------------------------------------------------
-          THE AI SUMMARY. Three states, three different renderings. Never a
-          blank card, and never a crash on a null field.
-         ------------------------------------------------------------------ */}
-      <section className="mt-6 rounded border border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Pre-visit summary</h2>
-          {s?.status === "READY" && s.urgency && (
-            <span className={`rounded border px-2 py-0.5 text-xs font-medium ${URGENCY[s.urgency]}`}>
-              {s.urgency} urgency
-            </span>
-          )}
-        </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* AI SUMMARY — three states, three renderings, never a blank card. */}
+        <Card>
+          <CardBody>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold">Pre-visit summary</h2>
+              {s?.status === "READY" && s.urgency && <UrgencyBadge urgency={s.urgency} />}
+            </div>
 
-        {s?.status === "READY" ? (
-          <div className="mt-3 space-y-3 text-sm">
-            <p className="font-medium">{s.chiefComplaint}</p>
-            <p className="text-gray-700">{s.summary}</p>
-            {s.suggestedQuestions.length > 0 && (
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Suggested questions</p>
-                <ol className="mt-1 list-decimal space-y-1 pl-5 text-gray-700">
-                  {s.suggestedQuestions.map((q, i) => <li key={i}>{q}</li>)}
-                </ol>
+            {s?.status === "READY" ? (
+              <div className="mt-3 space-y-3 text-sm">
+                <p className="font-medium">{s.chiefComplaint}</p>
+                <p className="leading-relaxed text-[var(--text-muted)]">{s.summary}</p>
+                {s.suggestedQuestions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+                      Suggested questions
+                    </p>
+                    <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-[var(--text-muted)]">
+                      {s.suggestedQuestions.map((q, i) => <li key={i}>{q}</li>)}
+                    </ol>
+                  </div>
+                )}
+                <p className="border-t border-[var(--border)] pt-2 text-xs text-[var(--text-subtle)]">
+                  AI-generated from the patient&apos;s form · {s.promptVersion}. Always read
+                  their own words below.
+                </p>
+              </div>
+            ) : s?.status === "PENDING" ? (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">
+                Being prepared. The patient&apos;s own words below are complete.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <Alert tone="warn">
+                  The summary could not be generated. The patient&apos;s own account is
+                  below and contains everything they reported — nothing has been lost.
+                </Alert>
+                {s?.lastError && (
+                  <p className="text-xs text-[var(--text-subtle)]">Reason: {s.lastError}</p>
+                )}
               </div>
             )}
-            <p className="text-xs text-gray-400">
-              AI-generated from the patient&apos;s form · {s.promptVersion}
-            </p>
-          </div>
-        ) : s?.status === "PENDING" ? (
-          <p className="mt-3 text-sm text-gray-500">
-            Being prepared. The patient&apos;s own words are below and are complete.
-          </p>
-        ) : (
-          <div className="mt-3">
-            <p className="text-sm text-gray-600">
-              The summary could not be generated. The patient&apos;s own account is below
-              and contains everything they reported — nothing has been lost.
-            </p>
-            {s?.lastError && (
-              <p className="mt-1 text-xs text-gray-400">Reason: {s.lastError}</p>
-            )}
-          </div>
-        )}
 
-        {/* Regenerate offered whenever we do not have a good summary. */}
-        {form && s?.status !== "READY" && <RegenerateSummary appointmentId={a.id} />}
-      </section>
+            {form && s?.status !== "READY" && <RegenerateSummary appointmentId={a.id} />}
+          </CardBody>
+        </Card>
 
-      {/* ------------------------------------------------------------------
-          THE PATIENT'S OWN WORDS. Always rendered, never dependent on the LLM.
-          This is what makes the summary an enhancement rather than a
-          dependency: a doctor reading only this section is exactly as
-          well-informed as one at a clinic with no AI at all.
-         ------------------------------------------------------------------ */}
-      <section className="mt-4 rounded border border-gray-200 p-4">
-        <h2 className="text-sm font-semibold">Reported by the patient</h2>
-        {form ? (
-          <div className="mt-3 space-y-2 text-sm">
-            <p className="whitespace-pre-wrap text-gray-800">{form.rawText}</p>
-            <dl className="grid grid-cols-2 gap-1 pt-2 text-gray-600">
-              <div><dt className="inline text-gray-400">Duration: </dt><dd className="inline">{form.durationDays} day(s)</dd></div>
-              <div><dt className="inline text-gray-400">Severity: </dt><dd className="inline">{form.severity}/10</dd></div>
-              <div className="col-span-2"><dt className="inline text-gray-400">Conditions: </dt><dd className="inline">{form.existingConditions || "none reported"}</dd></div>
-              <div className="col-span-2"><dt className="inline text-gray-400">Medications: </dt><dd className="inline">{form.currentMedications || "none reported"}</dd></div>
-            </dl>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-gray-500">No symptom form was submitted.</p>
-        )}
-      </section>
-
-      {/* ------------------------------------------------------------------
-          AFTER THE VISIT. Either the recorded notes, or the form to write
-          them. Submitting marks the appointment COMPLETED, materialises the
-          medication reminders and queues the patient-friendly summary.
-         ------------------------------------------------------------------ */}
-      <section className="mt-4 rounded border border-gray-200 p-4">
-        <h2 className="text-sm font-semibold">Visit notes and prescription</h2>
-        {note ? (
-          <div className="mt-3 space-y-2 text-sm">
-            <p className="whitespace-pre-wrap text-gray-800">{note.clinicalNotes}</p>
-            {note.diagnosis && (
-              <p><span className="text-gray-400">Diagnosis: </span>{note.diagnosis}</p>
-            )}
-            {note.followUpDays != null && (
-              <p><span className="text-gray-400">Follow-up in: </span>{note.followUpDays} day(s)</p>
-            )}
-            {meds.length > 0 && (
-              <div className="pt-2">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Prescribed</p>
-                <ul className="mt-1 space-y-1">
-                  {meds.map((m) => (
-                    <li key={m.id}>
-                      <b>{m.drugName}</b> {m.dose} · {m.frequency.toLowerCase().replace(/_/g, " ")} · {m.durationDays} day(s)
-                      {m.instructions ? ` · ${m.instructions}` : ""}
-                    </li>
-                  ))}
-                </ul>
+        {/* THE PATIENT'S OWN WORDS. Always rendered, never dependent on the LLM. */}
+        <Card>
+          <CardBody>
+            <h2 className="text-sm font-semibold">Reported by the patient</h2>
+            {form ? (
+              <div className="mt-3 space-y-3 text-sm">
+                <p className="whitespace-pre-wrap leading-relaxed">{form.rawText}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge>{form.durationDays} day(s)</Badge>
+                  <Badge tone={form.severity >= 8 ? "danger" : form.severity >= 5 ? "warn" : "neutral"}>
+                    severity {form.severity}/10
+                  </Badge>
+                </div>
+                <dl className="space-y-1 border-t border-[var(--border)] pt-2 text-[var(--text-muted)]">
+                  <div><dt className="inline text-[var(--text-subtle)]">Conditions: </dt>
+                    <dd className="inline">{form.existingConditions || "none reported"}</dd></div>
+                  <div><dt className="inline text-[var(--text-subtle)]">Medications: </dt>
+                    <dd className="inline">{form.currentMedications || "none reported"}</dd></div>
+                </dl>
               </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--text-muted)]">No symptom form was submitted.</p>
             )}
-            <p className="pt-2 text-xs text-gray-400">
-              Saved. Re-submitting replaces the prescription and regenerates the
-              patient summary.
-            </p>
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* AFTER THE VISIT */}
+      <Card className="mt-4">
+        <CardBody>
+          <h2 className="text-sm font-semibold">Visit notes and prescription</h2>
+          {note ? (
+            <>
+              <div className="mt-3 space-y-2 text-sm">
+                <p className="whitespace-pre-wrap leading-relaxed">{note.clinicalNotes}</p>
+                <div className="flex flex-wrap gap-2">
+                  {note.diagnosis && <Badge tone="brand">{note.diagnosis}</Badge>}
+                  {note.followUpDays != null && <Badge>follow up in {note.followUpDays} days</Badge>}
+                </div>
+                {meds.length > 0 && (
+                  <ul className="mt-2 space-y-1 border-t border-[var(--border)] pt-2">
+                    {meds.map((m) => (
+                      <li key={m.id} className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{m.drugName}</span>
+                        <span className="text-[var(--text-muted)]">{m.dose}</span>
+                        <Badge>{m.frequency.toLowerCase().replace(/_/g, " ")}</Badge>
+                        <span className="text-xs text-[var(--text-subtle)]">
+                          {m.durationDays} days{m.instructions ? ` · ${m.instructions}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--brand)]">
+                  Edit notes and prescription
+                </summary>
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
+                  Saving replaces the prescription entirely and regenerates the patient
+                  summary, so no doses from the old version are left scheduled.
+                </p>
+                <VisitNotesForm appointmentId={a.id} />
+              </details>
+            </>
+          ) : (
             <VisitNotesForm appointmentId={a.id} />
-          </div>
-        ) : (
-          <VisitNotesForm appointmentId={a.id} />
-        )}
-      </section>
-    </main>
+          )}
+        </CardBody>
+      </Card>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BTN } from "./ui";
 
 export default function DisconnectCalendar() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function DisconnectCalendar() {
         router.refresh();
       }}
       disabled={pending}
-      className="mt-3 rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
+      className={`${BTN.secondary} mt-4`}
     >
       {pending ? "Disconnecting…" : "Disconnect"}
     </button>

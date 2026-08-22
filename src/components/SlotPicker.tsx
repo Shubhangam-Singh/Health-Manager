@@ -39,27 +39,34 @@ export default function SlotPicker({ doctorId, slots }: { doctorId: string; slot
   }
 
   if (slots.length === 0) {
-    return <p className="mt-4 text-sm text-gray-500">No slots available on this date.</p>;
+    return (
+      <p className="mt-6 rounded-[8px] border border-dashed border-[var(--border-strong)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+        No slots available on this date. Try the next day.
+      </p>
+    );
   }
 
   return (
     <>
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {error && (
+        <p className="mt-3 rounded-[8px] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">{error}</p>
+      )}
+      <ul className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
         {slots.map((s) => (
           <li key={s.startAt}>
             <button
               onClick={() => hold(s.startAt)}
               disabled={pending || selected !== null}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm hover:border-black disabled:opacity-40"
+              className="w-full rounded-[8px] border border-[var(--border-strong)] bg-white px-3 py-2 text-sm font-medium tabular-nums transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand-ink)] disabled:opacity-40"
             >
               {selected === s.startAt ? "Holding…" : s.label}
             </button>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-gray-400">
-        Selecting a time holds it for 10 minutes while you describe your symptoms.
+      <p className="mt-4 text-xs text-[var(--text-subtle)]">
+        Selecting a time holds it for 10 minutes while you describe your symptoms, so
+        nobody else can take it while you type.
       </p>
     </>
   );

@@ -1,30 +1,65 @@
-import Link from "next/link";
 import { auth } from "@/auth";
-import SignOutButton from "@/components/SignOutButton";
+import { doctorOverview } from "@/server/services/dashboard.service";
+import { Card, CardBody, PageHeader, ButtonLink, EmptyState, Badge } from "@/components/ui";
 
 export default async function DoctorDashboard() {
-  // Server-side session read. Middleware already checked the role, but this
-  // page needs the user's details anyway -- and re-reading is free here.
   const session = await auth();
+  const data = await doctorOverview(session!.user.id);
+
+  if (!data) {
+    return <EmptyState title="No doctor profile" hint="An administrator needs to finish setting up this account." />;
+  }
+  const { profile, today, upcoming, needingNotes, highUrgency } = data;
+
+  const stats = [
+    { label: "In the next 24 hours", value: today },
+    { label: "Upcoming total", value: upcoming },
+    { label: "Awaiting your notes", value: needingNotes, tone: needingNotes > 0 },
+    { label: "Flagged high urgency", value: highUrgency, tone: highUrgency > 0 },
+  ];
 
   return (
-    <main className="mx-auto max-w-2xl p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Doctor dashboard</h1>
-        <SignOutButton />
+    <>
+      <PageHeader
+        title={session?.user?.name ?? "Doctor"}
+        subtitle={`${profile.specialisation} · ${profile.slotDurationMin}-minute appointments · ${profile.timezone}`}
+        action={<ButtonLink href="/doctor/appointments">View appointments</ButtonLink>}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((s) => (
+          <Card key={s.label}>
+            <CardBody>
+              <p className={`text-3xl font-semibold tracking-tight ${s.tone ? "text-[var(--danger)]" : ""}`}>
+                {s.value}
+              </p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">{s.label}</p>
+            </CardBody>
+          </Card>
+        ))}
       </div>
-      <dl className="mt-6 space-y-1 text-sm">
-        <div><dt className="inline text-gray-500">Name: </dt><dd className="inline">{session?.user?.name}</dd></div>
-        <div><dt className="inline text-gray-500">Email: </dt><dd className="inline">{session?.user?.email}</dd></div>
-        <div><dt className="inline text-gray-500">Role: </dt><dd className="inline font-mono">{session?.user?.role}</dd></div>
-        <div><dt className="inline text-gray-500">User id: </dt><dd className="inline font-mono text-xs">{session?.user?.id}</dd></div>
-      </dl>
-      <div className="mt-6">
-        <Link href="/doctor/appointments"
-          className="inline-block rounded bg-black px-4 py-2 text-sm text-white">
-          My appointments
-        </Link>
-      </div>
-    </main>
+
+      {highUrgency > 0 && (
+        <div className="mt-6">
+          <Card className="border-[var(--danger)]">
+            <CardBody className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge tone="danger">attention</Badge>
+                  <p className="font-medium">
+                    {highUrgency} appointment{highUrgency > 1 ? "s" : ""} flagged high urgency
+                  </p>
+                </div>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  The urgency is AI-generated from the patient&apos;s own description. Always read
+                  their words as well.
+                </p>
+              </div>
+              <ButtonLink href="/doctor/appointments" variant="secondary">Review</ButtonLink>
+            </CardBody>
+          </Card>
+        </div>
+      )}
+    </>
   );
 }
