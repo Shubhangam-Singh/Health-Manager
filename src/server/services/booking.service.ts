@@ -2,6 +2,7 @@ import { prisma } from "@/server/lib/prisma";
 import { AppError } from "@/server/lib/errors";
 import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { getAvailableSlots, isoDateInZone } from "./slot.service";
+import type { SymptomFormInput } from "@/server/validation/symptom.schema";
 
 /**
  * Booking, with the guarantee where it belongs: in the database.
@@ -82,7 +83,12 @@ export async function bookAppointment(input: {
  * worker delivers them afterwards and retries on failure. The appointment is
  * committed either way.
  */
-export async function bookFromHold(input: { holdId: string; patientId: string }) {
+export async function bookFromHold(input: {
+  holdId: string;
+  patientId: string;
+  /** Collected BEFORE confirming, written in the same transaction. */
+  symptoms?: SymptomFormInput;
+}) {
   try {
     return await prisma.$transaction(async (tx) => {
       const hold = await tx.slotHold.findUnique({
@@ -130,6 +136,15 @@ export async function bookFromHold(input: { holdId: string; patientId: string })
         patientName: hold.patient.name,
       };
 
+      // The symptom form is created here, not in a separate request, so an
+      // appointment can never exist without the symptoms the doctor needs --
+      // and an abandoned form can never be left orphaned.
+      if (input.symptoms) {
+        await tx.symptomForm.create({
+          data: { appointmentId: appointment.id, ...input.symptoms },
+        });
+      }
+
       await tx.notification.createMany({
         data: [
           {
@@ -157,4 +172,20 @@ export async function bookFromHold(input: { holdId: string; patientId: string })
     if (known) throw known;
     throw e;
   }
+}
+
+/** A patient's own appointments. Scoped by patientId so one patient can never
+ *  read another's — resource ownership enforced in the QUERY, which is the
+ *  hardest place to get it wrong. */
+export async function listPatientAppointments(patientId: string) {
+  return prisma.appointment.findMany({
+    where: { patientId },
+    include: {
+      doctor: {
+        select: { specialisation: true, timezone: true, user: { select: { name: true } } },
+      },
+      symptomForm: { select: { rawText: true, severity: true, durationDays: true } },
+    },
+    orderBy: { startAt: "desc" },
+  });
 }

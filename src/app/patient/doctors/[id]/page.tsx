@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDoctorPublic } from "@/server/services/doctor.service";
 import { getAvailableSlots, isoDateInZone } from "@/server/services/slot.service";
 import { AppError } from "@/server/lib/errors";
+import SlotPicker from "@/components/SlotPicker";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -70,23 +71,16 @@ export default async function DoctorAvailabilityPage({ params, searchParams }: P
           </div>
         </div>
 
-        {slots.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-500">
-            No slots available on this date.
-          </p>
-        ) : (
-          <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {slots.map((s) => (
-              <li key={s.startAt.toISOString()}
-                className="rounded border border-gray-300 px-3 py-2 text-center text-sm">
-                {fmt.format(s.startAt)}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-3 text-xs text-gray-400">
-          Booking arrives in Step 17 — selecting a slot will place a hold.
-        </p>
+        {/* Server-rendered data handed to a client island as plain props.
+            Dates are serialised to strings: only JSON-serialisable values may
+            cross the server/client boundary. */}
+        <SlotPicker
+          doctorId={doctor.id}
+          slots={slots.map((s) => ({
+            startAt: s.startAt.toISOString(),
+            label: fmt.format(s.startAt),
+          }))}
+        />
       </section>
     </main>
   );

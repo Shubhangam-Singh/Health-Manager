@@ -24,6 +24,10 @@ export default async function PatientDashboard() {
           className="inline-block rounded bg-black px-4 py-2 text-sm text-white">
           Find a doctor
         </Link>
+        <Link href="/patient/appointments"
+          className="ml-2 inline-block rounded border border-gray-300 px-4 py-2 text-sm">
+          My appointments
+        </Link>
       </div>
     </main>
   );
