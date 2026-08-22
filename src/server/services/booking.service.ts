@@ -1,6 +1,6 @@
-import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/lib/prisma";
 import { AppError } from "@/server/lib/errors";
+import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { getAvailableSlots, isoDateInZone } from "./slot.service";
 
 /**
@@ -52,12 +52,11 @@ export async function bookAppointment(input: {
       select: { id: true, doctorId: true, patientId: true, startAt: true, endAt: true, status: true },
     });
   } catch (e) {
-    // P2002 = unique constraint violation (Postgres SQLSTATE 23505).
     // Reaching here means we lost a race: our check said free, someone else
-    // committed first. The database decided, not us.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      throw new AppError("CONFLICT", "That slot was just taken. Please pick another time.");
-    }
-    throw e;
+    // committed first. translateDbError identifies the constraint by NAME
+    // (appointment_slot_unique) rather than assuming which one fired.
+    const known = translateDbError(e as DbErrorLike);
+    if (known) throw known;
+    throw e; // unknown database error -> 500, never swallowed
   }
 }

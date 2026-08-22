@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/lib/prisma";
 import { AppError } from "@/server/lib/errors";
+import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import type { CreateDoctorInput, UpdateDoctorInput } from "@/server/validation/doctor.schema";
 
 const BCRYPT_COST = 10;
@@ -46,9 +47,8 @@ export async function createDoctor(input: CreateDoctorInput) {
       return { ...profile, user };
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      throw new AppError("CONFLICT", "That email is already registered", "email");
-    }
+    const known = translateDbError(e as DbErrorLike);
+    if (known) throw known;
     throw e;
   }
 }

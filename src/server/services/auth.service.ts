@@ -1,7 +1,6 @@
 import bcrypt from "bcryptjs";
-import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/lib/prisma";
-import { AppError } from "@/server/lib/errors";
+import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import type { RegisterInput } from "@/server/validation/auth.schema";
 
 // Cost factor 10 => 2^10 = 1024 rounds, roughly 100ms per hash.
@@ -34,11 +33,11 @@ export async function registerUser(input: RegisterInput): Promise<PublicUser> {
     });
     return user;
   } catch (e) {
-    // P2002 = unique constraint violation. The DATABASE decided this, not us,
-    // so there is no race window between checking and inserting.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      throw new AppError("CONFLICT", "That email is already registered", "email");
-    }
+    // The DATABASE decided this, not us, so there is no race window between
+    // checking and inserting. The message comes from the shared translator,
+    // keyed on the constraint name User_email_key.
+    const known = translateDbError(e as DbErrorLike);
+    if (known) throw known;
     throw e;
   }
 }
