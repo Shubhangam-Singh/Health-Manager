@@ -7,7 +7,7 @@
  * not answer" is a NORMAL outcome the caller must handle, not an exception.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 const TIMEOUT_MS = 15_000;
 const MAX_ATTEMPTS = 2; // one try, then one retry
 
@@ -46,7 +46,12 @@ export async function generateJson(
             generationConfig: {
               // Low temperature: this is extraction, not creative writing.
               temperature: 0.2,
-              maxOutputTokens: 800,
+              // Generous, and deliberately so. Newer flash models spend part
+              // of their output budget on internal reasoning before writing
+              // the answer, so a tight cap truncates the JSON mid-string --
+              // which surfaces as "Unterminated string in JSON". Diagnosed
+              // exactly that way from a stored rawModelOutput.
+              maxOutputTokens: 4096,
               // Ask the API itself to guarantee JSON. Belt; zod is braces.
               responseMimeType: "application/json",
             },

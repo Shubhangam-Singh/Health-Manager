@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@/auth";
 import SignOutButton from "@/components/SignOutButton";
 
@@ -18,7 +19,12 @@ export default async function DoctorDashboard() {
         <div><dt className="inline text-gray-500">Role: </dt><dd className="inline font-mono">{session?.user?.role}</dd></div>
         <div><dt className="inline text-gray-500">User id: </dt><dd className="inline font-mono text-xs">{session?.user?.id}</dd></div>
       </dl>
-      <p className="mt-6 text-sm text-gray-500">DOCTOR features arrive in later steps.</p>
+      <div className="mt-6">
+        <Link href="/doctor/appointments"
+          className="inline-block rounded bg-black px-4 py-2 text-sm text-white">
+          My appointments
+        </Link>
+      </div>
     </main>
   );
 }
