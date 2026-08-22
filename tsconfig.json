@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    // The Node test runner resolves real files, so test imports carry a .ts
+    // extension. Safe here because Next compiles the app and tsc only checks.
+    "allowImportingTsExtensions": true,
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,

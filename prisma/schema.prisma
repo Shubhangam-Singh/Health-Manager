@@ -51,6 +51,12 @@ model DoctorProfile {
   slotDurationMin Int     @default(30)
   bio             String?
 
+  /// IANA timezone of the clinic this doctor works at, e.g. "Asia/Kolkata".
+  /// WorkingHour stores wall-clock minutes; Appointment stores UTC instants.
+  /// This field is the ONLY thing that can convert between the two. Without
+  /// it, "09:00" is not a real point in time.
+  timezone        String  @default("Asia/Kolkata")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
