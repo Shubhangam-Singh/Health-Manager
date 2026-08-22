@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDoctor } from "@/server/services/doctor.service";
 import { AppError } from "@/server/lib/errors";
 import { Card, CardBody, PageHeader, Badge } from "@/components/ui";
 import WorkingHoursEditor from "@/components/WorkingHoursEditor";
 import LeaveManager from "@/components/LeaveManager";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default async function AdminDoctorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,7 +19,11 @@ export default async function AdminDoctorPage({ params }: { params: Promise<{ id
 
   return (
     <>
-      <Link href="/admin/doctors" className="text-sm text-[var(--brand)] hover:underline">← All doctors</Link>
+      <Breadcrumbs items={[
+        { href: "/admin/dashboard", label: "Overview" },
+        { href: "/admin/doctors", label: "Doctors" },
+        { label: doctor.user.name },
+      ]} />
 
       <div className="mt-4">
         <PageHeader

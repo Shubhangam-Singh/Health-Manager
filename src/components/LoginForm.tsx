@@ -5,25 +5,24 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { INPUT, BTN, Field } from "./ui";
+import DemoAccounts from "./DemoAccounts";
 
-export default function LoginForm({ initialError }: { initialError?: string }) {
+export default function LoginForm({ initialError, showDemo }: { initialError?: string; showDemo?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [pending, setPending] = useState(false);
+  // Controlled so the demo buttons can fill them.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     setError(null);
 
-    const form = new FormData(e.currentTarget);
     // redirect:false so a failure renders inline instead of reloading the page
     // and discarding whatever the user typed.
-    const res = await signIn("credentials", {
-      email: form.get("email"),
-      password: form.get("password"),
-      redirect: false,
-    });
+    const res = await signIn("credentials", { email, password, redirect: false });
     setPending(false);
 
     if (res?.error) {
@@ -43,10 +42,12 @@ export default function LoginForm({ initialError }: { initialError?: string }) {
       <form onSubmit={onSubmit} className="mt-5 space-y-4">
         <Field label="Email">
           <input name="email" type="email" required autoComplete="email"
+            value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com" className={INPUT} />
         </Field>
         <Field label="Password">
           <input name="password" type="password" required autoComplete="current-password"
+            value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••" className={INPUT} />
         </Field>
 
@@ -60,6 +61,10 @@ export default function LoginForm({ initialError }: { initialError?: string }) {
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
+
+      {showDemo && (
+        <DemoAccounts onPick={(e, p) => { setEmail(e); setPassword(p); setError(null); }} />
+      )}
 
       <p className="mt-5 text-center text-sm text-[var(--text-muted)]">
         No account?{" "}

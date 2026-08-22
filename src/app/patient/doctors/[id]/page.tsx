@@ -6,6 +6,7 @@ import { AppError } from "@/server/lib/errors";
 import { Card, CardBody, PageHeader, Badge, BTN } from "@/components/ui";
 import SlotPicker from "@/components/SlotPicker";
 import DatePicker from "@/components/DatePicker";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { Suspense } from "react";
 
 type Props = {
@@ -47,7 +48,11 @@ export default async function DoctorAvailabilityPage({ params, searchParams }: P
 
   return (
     <>
-      <Link href="/patient/doctors" className="text-sm text-[var(--brand)] hover:underline">← Back to search</Link>
+      <Breadcrumbs items={[
+        { href: "/patient/dashboard", label: "Overview" },
+        { href: "/patient/doctors", label: "Find a doctor" },
+        { label: doctor.user.name },
+      ]} />
 
       <div className="mt-4">
         <PageHeader

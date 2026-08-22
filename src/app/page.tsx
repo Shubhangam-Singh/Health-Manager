@@ -14,6 +14,19 @@ export default async function HomePage() {
     }
   }
 
+  const steps = [
+    { title: "Choose a time", body: "Search by specialisation and pick a slot. It is held for ten minutes so nobody can take it while you type." },
+    { title: "Describe symptoms", body: "A short form in your own words. Your doctor reads it before you arrive." },
+    { title: "Get confirmed", body: "Email confirmation to you and your doctor, plus a calendar event if you connect one." },
+    { title: "After the visit", body: "A plain-English summary, your prescription, and reminders for each dose." },
+  ];
+
+  const portals = [
+    { role: "Patients", body: "Search doctors, hold a slot, share symptoms, and read what happened afterwards in plain language." },
+    { role: "Doctors", body: "See an AI triage summary with an urgency level before each visit, then record notes and a prescription." },
+    { role: "Admin", body: "Create doctor profiles, set weekly schedules, and record leave — with affected patients notified automatically." },
+  ];
+
   const features = [
     { title: "Book in seconds", body: "Search by specialisation, pick a time, and the slot is held for you while you fill in the details." },
     { title: "Your doctor is prepared", body: "Describe your symptoms in advance and your doctor gets a concise summary before you arrive." },
@@ -54,13 +67,45 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 pb-20 sm:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-3">
           {features.map((f) => (
             <div key={f.title} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)]">
               <h2 className="text-sm font-semibold">{f.title}</h2>
               <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">{f.body}</p>
             </div>
           ))}
+        </section>
+
+        <section className="py-16">
+          <h2 className="text-sm font-medium text-[var(--brand)]">How booking works</h2>
+          <ol className="mt-5 grid gap-5 sm:grid-cols-4">
+            {steps.map((s, i) => (
+              <li key={s.title} className="relative">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--brand)] text-xs font-semibold text-white">
+                  {i + 1}
+                </span>
+                <h3 className="mt-3 text-sm font-semibold">{s.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-[var(--text-muted)]">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="pb-20">
+          <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-sm)]">
+            <h2 className="text-sm font-semibold">Three portals, one system</h2>
+            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+              {portals.map((p) => (
+                <div key={p.role}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-ink)]">{p.role}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-[var(--text-muted)]">{p.body}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-5 border-t border-[var(--border)] pt-4 text-xs text-[var(--text-subtle)]">
+              Demo credentials for all three are on the sign-in page.
+            </p>
+          </div>
         </section>
       </main>
 

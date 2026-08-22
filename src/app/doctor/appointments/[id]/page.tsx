@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getDoctorAppointment } from "@/server/services/appointment.service";
@@ -6,6 +5,7 @@ import { AppError } from "@/server/lib/errors";
 import { Card, CardBody, PageHeader, StatusBadge, UrgencyBadge, Badge, Alert } from "@/components/ui";
 import RegenerateSummary from "@/components/RegenerateSummary";
 import VisitNotesForm from "@/components/VisitNotesForm";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default async function DoctorAppointmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,9 +33,11 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
 
   return (
     <>
-      <Link href="/doctor/appointments" className="text-sm text-[var(--brand)] hover:underline">
-        ← All appointments
-      </Link>
+      <Breadcrumbs items={[
+        { href: "/doctor/dashboard", label: "Overview" },
+        { href: "/doctor/appointments", label: "Appointments" },
+        { label: a.patient.name },
+      ]} />
 
       <div className="mt-4">
         <PageHeader

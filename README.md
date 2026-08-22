@@ -88,6 +88,7 @@ Copy `.env.example` to `.env`. Every key, and what happens without it:
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Calendar. Without them the connect button is disabled and sync is a no-op. |
 | `GOOGLE_REDIRECT_URI` | with the above | Must match Google Cloud Console **exactly**. |
 | `NEXT_PUBLIC_APP_URL` | no | **Inlined into the browser bundle.** Never put a secret behind this prefix. |
+| `NEXT_PUBLIC_HIDE_DEMO_ACCOUNTS` | no | `"true"` hides the demo credentials on the sign-in page. |
 
 ### Why two database URLs
 

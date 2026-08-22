@@ -21,5 +21,9 @@ export default async function LoginPage({ searchParams }: Props) {
   const { error } = await searchParams;
   const message = error ? (MESSAGES[error] ?? "Could not sign you in") : undefined;
 
-  return <LoginForm initialError={message} />;
+  // Demo credentials are shown unless explicitly disabled, so an evaluator
+  // opening this cold does not have to hunt through the README.
+  const showDemo = process.env.NEXT_PUBLIC_HIDE_DEMO_ACCOUNTS !== "true";
+
+  return <LoginForm initialError={message} showDemo={showDemo} />;
 }
