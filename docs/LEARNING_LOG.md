@@ -723,3 +723,64 @@ confirmed.
 **Deliberately not fixed.** The broken implementation is committed as its own step so
 the history shows the problem before the solution. Step 15 fixes it in the database,
 which is the only place it can be fixed.
+
+---
+
+## Step 15 — The fix: a partial unique index ⭐
+
+**Built:** a hand-written migration that repairs the duplicate data and then creates
+`appointment_slot_unique`, plus P2002 handling in the booking service.
+
+**Concepts that appeared:**
+
+- **Only the database can settle this, because only the database sees every
+  request.** The Node process may be one of several on Vercel, each with its own
+  memory. A JavaScript lock, a mutex or a "currently booking" set is invisible to the
+  others. Postgres is the single thing every request must pass through.
+- **A UNIQUE constraint is not a check performed for you — it is a promise
+  enforced.** Two inserts on the same key are serialised internally and the loser is
+  rejected. There is no window, because the check and the write are one operation.
+- **Why the index must be PARTIAL.** A plain unique index on `(doctorId, startAt)`
+  means "at most one appointment ever at this time", cancelled ones included. A
+  patient cancels Monday 09:00 and that slot becomes permanently unbookable, because
+  the cancelled row still occupies the key. `WHERE status IN ('PENDING','CONFIRMED')`
+  drops non-live rows out of the index entirely.
+- **You cannot add a constraint to a table whose data already violates it.** The
+  first attempt was refused: *"could not create unique index — Key ("doctorId",
+  "startAt")=(…, 2026-08-24 03:30:00) is duplicated."* Real migrations adding
+  constraints to live tables always face this. The constraint is the easy half; the
+  data repair is the hard half.
+- **The repair policy matters.** Earliest booking wins, later ones are CANCELLED
+  rather than deleted — an appointment is a medical record, and those patients still
+  need notifying. Written as a `ROW_NUMBER() OVER (PARTITION BY …)` window function
+  in the same migration, so repair and constraint apply atomically.
+- **The pre-check stays, with a different job.** It answers "is this even a real
+  slot?" — inside working hours, not a leave day, not in the past — which an index
+  cannot answer, and it produces a readable message. The step 14 bug was never
+  "we checked first"; it was **"checking was all we did"**.
+
+> **A check is a courtesy. A constraint is a promise.**
+
+- **P2002** is Prisma's code for a unique violation (Postgres SQLSTATE 23505).
+  Catching it and returning 409 is how losing the race becomes a normal outcome
+  rather than a 500.
+
+**THE RESULT — same test, same concurrency, fixed database:**
+
+```
+  10 concurrent → HTTP 201 × 1, HTTP 409 × 9   → 1 row   ✅
+  10 concurrent → HTTP 201 × 1, HTTP 409 × 9   → 1 row   ✅
+  10 concurrent → HTTP 201 × 1, HTTP 409 × 9   → 1 row   ✅
+  25 concurrent → HTTP 201 × 1, HTTP 409 × 24  → 1 row   ✅
+```
+
+Before the fix, the same script produced **8 winners out of 10**.
+
+**Proof the WHERE clause does what it claims:** inserting a second live row for a
+booked slot was refused with `23505: appointment_slot_unique`. After cancelling that
+appointment, the identical slot was booked again successfully, leaving 1 CONFIRMED and
+1 CANCELLED row for the same time. History preserved, slot reusable.
+
+**Bonus observation during cleanup:** deleting the test patients was blocked by
+`23001: Appointment_patientId_fkey` until their appointments were removed first —
+`onDelete: Restrict` protecting medical records, working exactly as intended.

@@ -747,3 +747,83 @@ two audiences should be free to diverge.
 **Extends to slots:** the slots endpoint returns only `startAt` and `endAt`. It never
 reveals who booked the surrounding slots, which would leak that a specific person has
 an appointment with a specific doctor.
+
+---
+
+## D29 — Double-booking prevented by a partial unique index, not by application code
+
+**Decision:** a hand-written migration creates
+
+```sql
+CREATE UNIQUE INDEX appointment_slot_unique
+  ON "Appointment" ("doctorId", "startAt")
+  WHERE status IN ('PENDING', 'CONFIRMED');
+```
+
+The booking service still checks availability first, then catches `P2002` and returns
+`409`.
+
+**Alternatives considered:**
+
+- *Check-then-insert in application code.* Built deliberately in Step 14 and measured:
+  10 concurrent requests produced **8 successful bookings for one slot**, created
+  across a 51 ms window. The check is truthful when made and stale when used — TOCTOUB
+  again. No additional application code closes the gap, because the gap sits *between*
+  statements rather than inside one.
+- *Pessimistic locking with `SELECT … FOR UPDATE`.* The textbook answer, and a poor
+  fit here: `FOR UPDATE` locks rows that **exist**, and the row we are protecting
+  against is the one nobody has inserted yet. Making it work needs a lock on something
+  else — the doctor row, or an advisory lock on a hashed key — which serialises every
+  booking for that doctor and holds a transaction open across the whole request. That
+  is a real cost for a conflict that is rare.
+- *A plain (non-partial) unique index.* Simpler, and wrong: a CANCELLED row keeps
+  occupying the key, so any cancelled slot becomes permanently unbookable.
+- *Serializable isolation.* Correct, and it converts the problem into serialisation
+  failures the application must detect and retry — more machinery for the same
+  outcome.
+
+**Why chosen:** the database is the only component every request passes through. On
+serverless, application-level coordination is not merely fragile, it is impossible —
+each instance has its own memory. The index makes the invariant true by construction
+rather than by care, and it costs nothing on the happy path: no locks held, no
+transaction spanning the request, no retries.
+
+**Optimistic, not pessimistic, and deliberately so.** Two patients wanting the same
+slot at the same moment is rare. Optimistic concurrency assumes success, verifies at
+commit, and pays only when there is an actual conflict.
+
+**Trade-off accepted:** the loser learns they lost only *after* attempting the write,
+so the UI must handle a 409 at the final step. The slot-hold mechanism in Step 17
+exists precisely to make that outcome rare in practice.
+
+**Measured result:** 10 concurrent → 1 × 201 and 9 × 409. 25 concurrent → 1 × 201 and
+24 × 409. Four consecutive runs, exactly one winner each time.
+
+---
+
+## D30 — Constraint migrations repair data before they constrain it
+
+**Decision:** the migration that adds `appointment_slot_unique` first cancels the
+duplicate bookings, in the same file and the same transaction.
+
+**Context:** the first attempt to create the index failed —
+*"could not create unique index … is duplicated"*. Postgres will not build a unique
+index over rows that already violate it, so the constraint could not be added at all
+until the existing data conformed.
+
+**Alternatives considered:** deleting the losing rows, which is simpler and destroys
+medical records that patients were told were confirmed. Or repairing manually before
+deploying, which does not survive being replayed on another environment — and a
+migration that only works on one database is not a migration.
+
+**Why chosen:** first come, first served is a defensible, explainable rule, and
+CANCELLED preserves the row so the affected patients remain notifiable — which the
+Step 23 outbox will need. Doing it inside the migration means any environment
+replaying the history lands in the same state.
+
+**Trade-off accepted:** the repair rule is a policy judgement baked into a migration,
+where it is easy to overlook later. Mitigated by a comment stating the policy and its
+reasoning at the point of the change.
+
+**Generalises:** adding a constraint to a populated table is always two problems —
+the constraint, and the data that predates it. The second is usually the harder one.
