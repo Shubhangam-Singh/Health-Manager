@@ -784,3 +784,61 @@ appointment, the identical slot was booked again successfully, leaving 1 CONFIRM
 **Bonus observation during cleanup:** deleting the test patients was blocked by
 `23001: Appointment_patientId_fkey` until their appointments were removed first —
 `onDelete: Restrict` protecting medical records, working exactly as intended.
+
+---
+
+## Step 16 — Prisma errors and HTTP semantics
+
+**Built:** `db-errors.ts` (one translator, 10 unit tests) and a rewritten
+`toErrorResponse`. Every route now maps errors the same way.
+
+**Concepts that appeared:**
+
+- **Status codes divide errors by whose problem it is and what to do next.**
+  400 — the request is malformed, fix it and retry; retrying unchanged never works.
+  409 — the request is valid but conflicts with current state; retrying unchanged
+  might work later, or never. 500 — our problem, the client did nothing wrong.
+- **Why P2002 is 409, not 400.** Losing the booking race means the request was
+  flawless — the slot genuinely was free when it was asked about. Nothing about the
+  *request* was wrong; the world changed. 400 blames the client for something they
+  could not have known.
+- **Why it is not 500 either,** and this is the operational argument: 500s should
+  page someone at 3am. Losing a race is a planned, normal outcome. If it emits 500s,
+  the alerting drowns in noise and people stop looking at it.
+- **Error mapping belongs in one place.** Three services each caught `P2002` and
+  *assumed* which constraint had fired. That assumption becomes silently wrong the
+  moment a table gains a second unique constraint. The translator identifies the
+  constraint by name.
+- **Unknown database errors return `undefined` and are rethrown,** so they become
+  500s. Swallowing what you do not recognise is how real bugs go silent.
+- **Responses carry a machine-readable `code`.** Clients branch on
+  `code: "CONFLICT"`, never on message text — messages get reworded, and any client
+  parsing English breaks without warning.
+- **Error text is not returned to the client.** Database messages leak table names,
+  query fragments and file paths. The detail is logged; the client gets
+  "Something went wrong".
+
+**Prisma 7 gotcha worth remembering.** Every tutorial reads `e.meta.target` to find
+which constraint failed. With driver adapters **that field does not exist**. Probing a
+real database showed the detail lives at
+`meta.driverAdapterError.cause.constraint`, as `{ fields: ["email"] }` or
+`{ index: "appointment_slot_unique" }`. Both shapes plus the classic `meta.target`
+are handled, so swapping the adapter will not break it.
+
+Observed codes: 23505 unique → `P2002`; 23503 foreign key → `P2003`; 23514 check →
+`P2039`; missing row on update/delete → `P2025`.
+
+**Second Node gotcha, hit twice in one step.** Node runs `.ts` files by **stripping
+types, not compiling them**:
+
+1. Imports need explicit extensions — `./errors` had to become `./errors.ts` — because
+   Node's ESM loader resolves real files while webpack and tsc do not require it.
+2. `AppError` used TypeScript **parameter properties**
+   (`constructor(public readonly code: ...)`), which need real code generation and
+   fail with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Rewritten as explicit field
+   declarations. The same limitation applies to `enum`, namespaces and decorators.
+
+**Tests use error shapes captured from a real database,** not invented ones. A
+fixture I made up would test my imagination rather than Prisma's actual behaviour —
+and given `meta.target` turned out not to exist, an invented fixture would have
+passed while the production code failed.

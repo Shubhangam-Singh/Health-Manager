@@ -827,3 +827,58 @@ reasoning at the point of the change.
 
 **Generalises:** adding a constraint to a populated table is always two problems —
 the constraint, and the data that predates it. The second is usually the harder one.
+
+---
+
+## D31 — One translator maps database errors to HTTP status codes
+
+**Decision:** `db-errors.ts` is the only module that inspects Prisma error codes. It
+identifies the failing constraint **by name** and returns an `AppError`, or
+`undefined` for anything unrecognised, which callers rethrow.
+
+**Alternatives considered:** catching `P2002` in each service, which is what the code
+did through Steps 6, 11 and 15. Three separate handlers each *assumed* which
+constraint had fired — correct only while every table has exactly one unique
+constraint. `Appointment` already has two candidate failures (the slot index and two
+foreign keys), so the assumption was already fragile.
+
+**Why chosen:** the mapping from constraint name to user-facing message is a single
+piece of knowledge. Spread across services it drifts; centralised it is one table
+that can be read top to bottom. Unrecognised codes deliberately return `undefined`
+rather than a generic 409, because a database error nobody anticipated is a bug and
+should surface as a 500 rather than be quietly reported as a conflict.
+
+**Trade-off accepted:** a new constraint needs an entry here or its message degrades
+to a generic one. That is the intended failure mode — vague but correct, rather than
+specific and wrong.
+
+**Prisma 7 detail worth stating:** with driver adapters, `e.meta.target` does not
+exist; the constraint is reported at `meta.driverAdapterError.cause.constraint`. The
+translator reads both shapes and falls back to parsing the constraint name out of the
+raw message, so the adapter can be swapped without breaking error handling.
+
+---
+
+## D32 — Error responses carry a stable code; messages are for humans only
+
+**Decision:** every error response is `{ error, code, field? }` where `code` is one of
+`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL`.
+Internal error text is never returned.
+
+**Alternatives considered:** returning the message alone, which forces clients to
+match on English and breaks silently when wording changes or is translated. Or
+returning the raw database error, which is genuinely useful in development and leaks
+table names, column names and query fragments to anyone probing the API.
+
+**Why chosen:** the status code alone is often too coarse — two different 409s may
+need different handling — and the message is too unstable to branch on. A separate
+code field is the contract; the message is presentation.
+
+**Trade-off accepted:** debugging a production issue means correlating a generic
+client message with server logs, rather than reading the cause in the response. That
+is the correct direction for the trade: detail belongs in logs the operator can see,
+not in responses an attacker can read.
+
+**Consistency rule adopted:** no route handler constructs an error response itself.
+Every one ends with `catch (e) { return toErrorResponse(e); }`, verified by grepping
+for `HTTP_STATUS` under `src/app/` — zero matches.
