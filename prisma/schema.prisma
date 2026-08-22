@@ -145,7 +145,8 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  symptomForm SymptomForm?
+  symptomForm     SymptomForm?
+  preVisitSummary PreVisitSummary?
 
   /// Availability lookups: "what does this doctor have booked on this day?"
   @@index([doctorId, startAt])
@@ -275,4 +276,51 @@ model SymptomForm {
   currentMedications String?
 
   createdAt DateTime @default(now())
+}
+
+/// LLM-generated triage summary for the doctor.
+///
+/// THREE STATES, because generation is unreliable by nature:
+///   PENDING — row exists, generation not finished (or never started)
+///   READY   — validated output stored
+///   FAILED  — gave up; the doctor sees the raw symptom text instead
+///
+/// The row is created PENDING inside the booking transaction, so a summary is
+/// never silently missing: a doctor can always tell "not ready yet" from
+/// "nobody ever tried".
+model PreVisitSummary {
+  id String @id @default(cuid())
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  status SummaryStatus @default(PENDING)
+
+  urgency            Urgency?
+  chiefComplaint     String?
+  summary            String?
+  suggestedQuestions String[]
+
+  /// Kept for debugging: when validation fails you need to see what the model
+  /// actually said, not just that it was rejected.
+  rawModelOutput String?
+  promptVersion  String?
+  lastError      String?
+  attempts       Int      @default(0)
+  generatedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum SummaryStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
 }

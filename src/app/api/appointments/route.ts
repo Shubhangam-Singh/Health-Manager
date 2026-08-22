@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/server/lib/auth-guard";
 import { toErrorResponse } from "@/server/lib/http";
 import { bookAppointment, bookFromHold } from "@/server/services/booking.service";
 import { symptomFormSchema } from "@/server/validation/symptom.schema";
+import { generatePreVisitSummary } from "@/server/services/summary.service";
 
 // Two ways to book, expressed as a union so the shape is explicit:
 //   { holdId }              -- the normal flow: confirm a slot you hold
@@ -42,6 +43,14 @@ export async function POST(request: Request) {
             patientId: user.id,
             startAt: new Date(parsed.data.startAt),
           });
+
+    // after() runs once the response has been flushed to the client. The
+    // patient sees "confirmed" immediately; the LLM call happens behind it.
+    // Booking NEVER waits on the model, and a model failure cannot affect
+    // this response. generatePreVisitSummary never throws.
+    if ("holdId" in parsed.data && parsed.data.symptoms) {
+      after(() => generatePreVisitSummary(appointment.id));
+    }
 
     return NextResponse.json({ appointment }, { status: 201 });
   } catch (e) {

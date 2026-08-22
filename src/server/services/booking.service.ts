@@ -143,6 +143,13 @@ export async function bookFromHold(input: {
         await tx.symptomForm.create({
           data: { appointmentId: appointment.id, ...input.symptoms },
         });
+        // A PENDING summary row is created HERE, inside the transaction, so a
+        // doctor can always distinguish "not generated yet" from "nobody ever
+        // tried". The LLM call itself happens after the response is sent --
+        // booking must never wait on a language model.
+        await tx.preVisitSummary.create({
+          data: { appointmentId: appointment.id, status: "PENDING" },
+        });
       }
 
       await tx.notification.createMany({
