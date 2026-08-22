@@ -4,6 +4,8 @@ import { isCalendarConfigured } from "@/server/lib/google-calendar";
 import { Card, CardBody, PageHeader, Alert, Badge, BTN } from "@/components/ui";
 import DisconnectCalendar from "@/components/DisconnectCalendar";
 
+export const metadata = { title: "Google Calendar · Health Manager", description: "Connect your calendar to sync appointments." };
+
 type Props = { searchParams: Promise<{ connected?: string; error?: string }> };
 
 const ERRORS: Record<string, string> = {

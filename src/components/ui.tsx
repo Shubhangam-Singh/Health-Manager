@@ -83,15 +83,32 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
-export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+export function EmptyState({ title, hint, action, icon }: {
+  title: string; hint?: string; action?: ReactNode; icon?: ReactNode;
+}) {
   return (
     <Card className="border-dashed">
-      <div className="px-5 py-10 text-center">
+      <div className="px-5 py-12 text-center">
+        {icon && (
+          <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-gray-100 text-[var(--text-subtle)]">
+            {icon}
+          </div>
+        )}
         <p className="text-sm font-medium text-[var(--text)]">{title}</p>
-        {hint && <p className="mx-auto mt-1 max-w-sm text-sm text-[var(--text-muted)]">{hint}</p>}
-        {action && <div className="mt-4 flex justify-center">{action}</div>}
+        {hint && <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-[var(--text-muted)]">{hint}</p>}
+        {action && <div className="mt-5 flex justify-center">{action}</div>}
       </div>
     </Card>
+  );
+}
+
+/** A labelled key/value row, used wherever small facts are listed. */
+export function DataRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 text-sm">
+      <span className="text-[var(--text-subtle)]">{label}</span>
+      <span className="text-right">{value}</span>
+    </div>
   );
 }
 

@@ -1,10 +1,37 @@
+import Link from "next/link";
 import { auth } from "@/auth";
 import { listPatientAppointments } from "@/server/services/booking.service";
 import { Card, CardBody, PageHeader, ButtonLink, StatusBadge, EmptyState, Badge } from "@/components/ui";
+import { IconClipboard } from "@/components/icons";
 
-export default async function PatientAppointmentsPage() {
+export const metadata = { title: "My appointments · Health Manager", description: "Past and upcoming appointments, summaries and prescriptions." };
+
+type Props = { searchParams: Promise<{ show?: string }> };
+
+export default async function PatientAppointmentsPage({ searchParams }: Props) {
+  const { show } = await searchParams;
   const session = await auth();
-  const appointments = await listPatientAppointments(session!.user.id);
+  const all = await listPatientAppointments(session!.user.id);
+
+  // Filtering in the URL rather than in client state: the view is shareable,
+  // survives a refresh, and needs no JavaScript.
+  const now = Date.now();
+  const isUpcoming = (d: Date) => d.getTime() >= now;
+  const counts = {
+    all: all.length,
+    upcoming: all.filter((a) => isUpcoming(a.startAt) && a.status === "CONFIRMED").length,
+    past: all.filter((a) => !isUpcoming(a.startAt) || a.status !== "CONFIRMED").length,
+  };
+  const appointments =
+    show === "upcoming" ? all.filter((a) => isUpcoming(a.startAt) && a.status === "CONFIRMED")
+    : show === "past" ? all.filter((a) => !isUpcoming(a.startAt) || a.status !== "CONFIRMED")
+    : all;
+
+  const tabs = [
+    { key: undefined, label: "All", n: counts.all },
+    { key: "upcoming", label: "Upcoming", n: counts.upcoming },
+    { key: "past", label: "Past", n: counts.past },
+  ];
 
   return (
     <>
@@ -14,10 +41,35 @@ export default async function PatientAppointmentsPage() {
         action={<ButtonLink href="/patient/doctors">Book another</ButtonLink>}
       />
 
+      <div className="mb-5 flex flex-wrap gap-2">
+        {tabs.map((t) => {
+          const active = show === t.key || (!show && !t.key);
+          return (
+            <Link key={t.label} href={t.key ? `?show=${t.key}` : "/patient/appointments"}
+              className={`rounded-full border px-3.5 py-1.5 text-xs transition ${active
+                ? "border-[var(--brand)] bg-[var(--brand-soft)] font-medium text-[var(--brand-ink)]"
+                : "border-[var(--border-strong)] bg-white text-[var(--text-muted)] hover:bg-gray-50"}`}>
+              {t.label} <span className="tabular-nums opacity-70">{t.n}</span>
+            </Link>
+          );
+        })}
+      </div>
+
       {appointments.length === 0 && (
         <EmptyState
-          title="No appointments yet"
-          hint="Find a doctor by specialisation and pick a time."
+          icon={<IconClipboard className="h-5 w-5" />}
+          title={
+            counts.all === 0 ? "No appointments yet"
+            : show === "upcoming" ? "Nothing coming up"
+            : "No past appointments"
+          }
+          hint={
+            counts.all === 0
+              ? "Once you book, this is where you will find your confirmations, the summary your doctor writes afterwards, and any prescription."
+              : show === "upcoming"
+                ? "You have no confirmed appointments in the future."
+                : "Appointments move here once they have happened or been cancelled."
+          }
           action={<ButtonLink href="/patient/doctors">Find a doctor</ButtonLink>}
         />
       )}

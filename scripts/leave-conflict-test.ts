@@ -21,7 +21,7 @@ async function login(email: string, password: string) {
     body: new URLSearchParams({ csrfToken, email, password }),
   });
   const s = (r2.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0])
-    .filter((c) => c.startsWith("authjs.session-token"));
+    .filter((c) => c.includes("authjs.session-token"));
   if (!s.length) throw new Error(`login failed: ${email}`);
   return [c1, ...s].join("; ");
 }

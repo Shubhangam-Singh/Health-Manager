@@ -2,7 +2,9 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { listDoctorAppointments } from "@/server/services/appointment.service";
 import { Card, CardBody, PageHeader, StatusBadge, UrgencyBadge, Badge, EmptyState } from "@/components/ui";
-import { IconClock, IconAlert, IconArrowRight } from "@/components/icons";
+import { IconClock, IconAlert, IconArrowRight, IconStethoscope } from "@/components/icons";
+
+export const metadata = { title: "Appointments · Health Manager", description: "Your scheduled patients." };
 
 export default async function DoctorAppointmentsPage() {
   const session = await auth();
@@ -34,7 +36,11 @@ export default async function DoctorAppointmentsPage() {
       />
 
       {appointments.length === 0 && (
-        <EmptyState title="No appointments booked" hint="Patients will appear here as they book." />
+        <EmptyState
+          icon={<IconStethoscope className="h-5 w-5" />}
+          title="No appointments booked"
+          hint="Patients appear here as they book. Each one arrives with a symptom summary you can read before the visit."
+        />
       )}
 
       <div className="space-y-8">

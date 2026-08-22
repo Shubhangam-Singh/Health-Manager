@@ -3,6 +3,8 @@ import { patientOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, Badge, EmptyState } from "@/components/ui";
 import { IconCalendar, IconClipboard, IconPill } from "@/components/icons";
 
+export const metadata = { title: "Overview · Health Manager", description: "Your upcoming appointments and medication reminders." };
+
 export default async function PatientDashboard() {
   const session = await auth();
   const { upcoming, past, activeMeds, nextAppointment } = await patientOverview(session!.user.id);
@@ -59,8 +61,9 @@ export default async function PatientDashboard() {
         </Card>
       ) : (
         <EmptyState
+          icon={<IconCalendar className="h-5 w-5" />}
           title="No upcoming appointments"
-          hint="Search by specialisation and pick a time that suits you."
+          hint="Search by specialisation and pick a time that suits you. Your slot is held for ten minutes while you describe your symptoms."
           action={<ButtonLink href="/patient/doctors">Find a doctor</ButtonLink>}
         />
       )}

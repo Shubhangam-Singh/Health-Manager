@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { listDoctors } from "@/server/services/doctor.service";
 import { Card, CardBody, PageHeader, Badge, EmptyState } from "@/components/ui";
+import { IconUsers } from "@/components/icons";
 import CreateDoctorForm from "@/components/CreateDoctorForm";
+
+export const metadata = { title: "Doctors · Health Manager", description: "Create and manage doctor profiles." };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -16,7 +19,11 @@ export default async function AdminDoctorsPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-3">
           {doctors.length === 0 && (
-            <EmptyState title="No doctors yet" hint="Create the first profile using the form." />
+            <EmptyState
+              icon={<IconUsers className="h-5 w-5" />}
+              title="No doctors yet"
+              hint="Create the first profile using the form, then set their working hours so patients can book."
+            />
           )}
 
           {doctors.map((d) => (

@@ -2,6 +2,8 @@ import { adminOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, Badge } from "@/components/ui";
 import { IconStethoscope, IconUsers, IconCalendar } from "@/components/icons";
 
+export const metadata = { title: "Clinic overview · Health Manager", description: "Doctors, patients and delivery health." };
+
 export default async function AdminDashboard() {
   const s = await adminOverview();
 

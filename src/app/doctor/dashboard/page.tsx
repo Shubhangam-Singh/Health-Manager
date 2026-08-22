@@ -3,6 +3,8 @@ import { doctorOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, EmptyState, Badge } from "@/components/ui";
 import { IconClock, IconCalendar, IconClipboard, IconAlert } from "@/components/icons";
 
+export const metadata = { title: "Overview · Health Manager", description: "Your day at a glance." };
+
 export default async function DoctorDashboard() {
   const session = await auth();
   const data = await doctorOverview(session!.user.id);

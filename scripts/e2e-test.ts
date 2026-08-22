@@ -15,15 +15,25 @@ async function login(email: string, password: string) {
   const r2 = await fetch(`${BASE}/api/auth/callback/credentials`, { method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: c1 },
     body: new URLSearchParams({ csrfToken, email, password }) });
-  const s = (r2.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).filter((c) => c.startsWith("authjs.session-token"));
+  const s = (r2.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).filter((c) => c.includes("authjs.session-token"));
   if (!s.length) throw new Error(`login failed: ${email}`);
   return [c1, ...s].join("; ");
 }
 const ok = (b: boolean) => (b ? "PASS" : "FAIL");
 
-async function main() {
+/**
+ * A short-lived connection per query. Holding one open across the whole run
+ * fails with ECONNRESET, because Neon closes idle connections while the script
+ * is waiting on HTTP calls and on the LLM.
+ */
+async function q(sql: string, params: unknown[] = []) {
   const db = new Client({ connectionString: process.env.DIRECT_URL });
   await db.connect();
+  try { return await db.query(sql, params); }
+  finally { await db.end(); }
+}
+
+async function main() {
   let failures = 0;
   const step = (n: string, pass: boolean, extra = "") => {
     if (!pass) failures++;
@@ -63,13 +73,13 @@ async function main() {
   const appt = (await booked.json()) as { appointment: { id: string } };
   step("appointment confirmed with symptom form", booked.status === 201);
 
-  const q = await db.query(`SELECT
+  const counts = await q(`SELECT
       (SELECT COUNT(*)::int FROM "Notification" WHERE payload->>'appointmentId'=$1) notifs,
       (SELECT COUNT(*)::int FROM "CalendarEvent" WHERE "appointmentId"=$1) cal,
       (SELECT COUNT(*)::int FROM "SlotHold" WHERE id=$2) holds`, [appt.appointment.id, h.hold.id]);
-  step("2 notifications queued (outbox)", q.rows[0].notifs === 2, `${q.rows[0].notifs}`);
-  step("2 calendar events queued", q.rows[0].cal === 2, `${q.rows[0].cal}`);
-  step("hold consumed", q.rows[0].holds === 0);
+  step("2 notifications queued (outbox)", counts.rows[0].notifs === 2, `${counts.rows[0].notifs}`);
+  step("2 calendar events queued", counts.rows[0].cal === 2, `${counts.rows[0].cal}`);
+  step("hold consumed", counts.rows[0].holds === 0);
 
   const doctor = await login("mehta@clinic.test", "doctor12345");
   const notes = await fetch(`${BASE}/api/appointments/${appt.appointment.id}/visit-notes`, {
@@ -82,7 +92,7 @@ async function main() {
       ] }) });
   step("doctor records notes and prescription", notes.status === 201, `HTTP ${notes.status}`);
 
-  const rem = await db.query(`SELECT COUNT(*)::int n FROM "MedicationReminder" mr
+  const rem = await q(`SELECT COUNT(*)::int n FROM "MedicationReminder" mr
     JOIN "PrescriptionItem" pi ON pi.id=mr."prescriptionItemId"
     JOIN "Prescription" p ON p.id=pi."prescriptionId" WHERE p."appointmentId"=$1`, [appt.appointment.id]);
   step("58 medication reminders materialised", rem.rows[0].n === 58, `${rem.rows[0].n}`);
@@ -101,7 +111,7 @@ async function main() {
   // Wait for the AI summaries, which run after the response.
   let pre: string | undefined, post: string | undefined;
   for (let i = 0; i < 20; i++) {
-    const r = await db.query(
+    const r = await q(
       `SELECT (SELECT status FROM "PreVisitSummary" WHERE "appointmentId"=$1) pre,
               (SELECT status FROM "PostVisitSummary" WHERE "appointmentId"=$1) post`, [appt.appointment.id]);
     pre = r.rows[0].pre; post = r.rows[0].post;
@@ -112,7 +122,6 @@ async function main() {
   step("post-visit summary generated", post === "READY", `${post}`);
 
   console.log(`\n  ${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"}\n`);
-  await db.end();
   process.exit(failures === 0 ? 0 : 1);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

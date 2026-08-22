@@ -61,6 +61,13 @@ export default async function AppShell({ children }: { children: React.ReactNode
       </header>
 
       <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
+
+      <footer className="border-t border-[var(--border)] py-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 text-xs text-[var(--text-subtle)]">
+          <span>Health Manager — demo application, not for real clinical use.</span>
+          <span>AI summaries are assistive only. Always read the patient&apos;s own words.</span>
+        </div>
+      </footer>
     </div>
   );
 }

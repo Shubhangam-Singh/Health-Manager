@@ -16,7 +16,7 @@ async function patient(email: string) {
   const r2 = await fetch(`${BASE}/api/auth/callback/credentials`, { method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: c1 },
     body: new URLSearchParams({ csrfToken, email, password: PW }) });
-  const s = (r2.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).filter(c => c.startsWith("authjs.session-token"));
+  const s = (r2.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).filter(c => c.includes("authjs.session-token"));
   return [c1, ...s].join("; ");
 }
 

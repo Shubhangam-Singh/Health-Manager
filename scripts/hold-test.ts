@@ -32,7 +32,7 @@ async function patient(email: string): Promise<string> {
     body: new URLSearchParams({ csrfToken, email, password: PASSWORD }),
   });
   const session = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0])
-    .filter((c) => c.startsWith("authjs.session-token"));
+    .filter((c) => c.includes("authjs.session-token"));
   if (!session.length) throw new Error(`login failed: ${email}`);
   return [cookie, ...session].join("; ");
 }

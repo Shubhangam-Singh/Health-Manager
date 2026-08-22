@@ -4,6 +4,8 @@ import { getActiveHold } from "@/server/services/hold.service";
 import { Card, CardBody, PageHeader, Badge } from "@/components/ui";
 import SymptomFormCard from "@/components/SymptomFormCard";
 
+export const metadata = { title: "Describe your symptoms · Health Manager", description: "Tell your doctor what is wrong before the visit." };
+
 export default async function BookPage() {
   const session = await auth();
   const hold = await getActiveHold(session!.user.id);

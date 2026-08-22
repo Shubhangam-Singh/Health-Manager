@@ -2,6 +2,8 @@ import Link from "next/link";
 import { searchDoctors, listSpecialisations } from "@/server/services/doctor.service";
 import { Card, CardBody, PageHeader, Badge, EmptyState, INPUT, BTN } from "@/components/ui";
 
+export const metadata = { title: "Find a doctor · Health Manager", description: "Search doctors by specialisation and book a slot." };
+
 type Props = { searchParams: Promise<{ q?: string }> };
 
 export default async function DoctorSearchPage({ searchParams }: Props) {

@@ -40,7 +40,7 @@ async function login(email: string): Promise<Cookie> {
   });
   const session = (res.headers.getSetCookie?.() ?? [])
     .map((c) => c.split(";")[0])
-    .filter((c) => c.startsWith("authjs.session-token"));
+    .filter((c) => c.includes("authjs.session-token"));
   if (session.length === 0) throw new Error(`login failed for ${email}`);
   return [cookie, ...session].join("; ");
 }
