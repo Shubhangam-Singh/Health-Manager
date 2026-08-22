@@ -1,58 +1,25 @@
-"use client";
+import LoginForm from "@/components/LoginForm";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
-import Link from "next/link";
+/**
+ * Server shell around a client form -- the same pattern as SlotPicker.
+ * It exists so the ?error= that Auth.js appends can be read on the server and
+ * passed down as a prop, instead of the client reaching for useSearchParams
+ * (which would force this page dynamic and need a Suspense boundary).
+ */
+type Props = { searchParams: Promise<{ error?: string }> };
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+// Auth.js error codes are internal identifiers, not user-facing text.
+const MESSAGES: Record<string, string> = {
+  // Stays vague on purpose: never reveal whether the email exists (D17).
+  CredentialsSignin: "Invalid email or password",
+  AccessDenied: "That account is not allowed to sign in",
+  Verification: "That sign-in link has expired. Please try again.",
+  Configuration: "Sign-in is temporarily unavailable. Please try again shortly.",
+};
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); // stop the browser's own full-page form POST
-    setPending(true);
-    setError(null);
+export default async function LoginPage({ searchParams }: Props) {
+  const { error } = await searchParams;
+  const message = error ? (MESSAGES[error] ?? "Could not sign you in") : undefined;
 
-    const form = new FormData(e.currentTarget);
-    // redirect:false => we handle the outcome ourselves instead of letting
-    // Auth.js bounce the page and lose whatever the user typed.
-    const res = await signIn("credentials", {
-      email: form.get("email"),
-      password: form.get("password"),
-      redirect: false,
-    });
-
-    setPending(false);
-
-    if (res?.error) {
-      // Deliberately vague: never reveal whether the email exists (see D17).
-      setError("Invalid email or password");
-      return;
-    }
-
-    router.push("/"); // "/" decides which portal, on the server
-    router.refresh(); // discard cached logged-out server content
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <input name="email" type="email" required placeholder="Email"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-      <input name="password" type="password" required placeholder="Password"
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <button type="submit" disabled={pending}
-        className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
-
-      <p className="text-center text-xs text-gray-500">
-        No account? <Link href="/register" className="underline">Register</Link>
-      </p>
-    </form>
-  );
+  return <LoginForm initialError={message} />;
 }

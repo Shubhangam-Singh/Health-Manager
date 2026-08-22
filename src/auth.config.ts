@@ -6,7 +6,13 @@ import type { NextAuthConfig } from "next-auth";
 // ever runs in Node.
 export const authConfig = {
   session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
-  pages: { signIn: "/login" },
+  pages: {
+    signIn: "/login",
+    // Without this, Auth.js sends failures to its own bare /api/auth/error
+    // route. Point them at the login page so the user lands somewhere they
+    // can act on, with the reason in ?error=.
+    error: "/login",
+  },
   providers: [],
 
   callbacks: {
