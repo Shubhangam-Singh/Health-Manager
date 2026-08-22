@@ -98,4 +98,4 @@ longer instant — up to one worker interval. Invisible for a booking confirmati
 unacceptable for a one-time passcode, which would justify a different design.
 
 ---
-*Word count: 782 (excluding headings and the SQL block)*
+*789 words, excluding headings and the SQL block.*
