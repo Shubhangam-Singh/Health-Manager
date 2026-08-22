@@ -16,17 +16,18 @@ async function patient(email: string) {
 }
 async function main() {
   const cookie = await patient("llm@test.com");
-  const docs = (await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: cookie } })).json()).doctors;
-  let t: any = null;
+  const docs = ((await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: cookie } })).json()) as { doctors: { id: string }[] }).doctors;
+  type Target = { doctorId: string; startAt: string };
+  let t: Target | null = null;
   for (let i = 1; i <= 14 && !t; i++) {
     const date = new Date(Date.now() + i * 86400000).toISOString().slice(0, 10);
     for (const d of docs) {
-      const s = (await (await fetch(`${BASE}/api/doctors/${d.id}/slots?date=${date}`, { headers: { Cookie: cookie } })).json()).slots;
+      const s = ((await (await fetch(`${BASE}/api/doctors/${d.id}/slots?date=${date}`, { headers: { Cookie: cookie } })).json()) as { slots?: { startAt: string }[] }).slots;
       if (s?.length) { t = { doctorId: d.id, startAt: s[0].startAt }; break; }
     }
   }
   const h = await (await fetch(`${BASE}/api/holds`, { method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(t) })).json();
+    headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(t!) })).json();
   const t0 = Date.now();
   const res = await fetch(`${BASE}/api/appointments`, { method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },

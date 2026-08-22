@@ -43,7 +43,8 @@ test("rejects an invented urgency level", () => {
 });
 
 test("rejects a missing field", () => {
-  const { chiefComplaint, ...missing } = good;
+  const missing: Record<string, unknown> = { ...good };
+  delete missing.chiefComplaint;
   assert.equal(parseModelJson(JSON.stringify(missing), preVisitSummarySchema).ok, false);
 });
 

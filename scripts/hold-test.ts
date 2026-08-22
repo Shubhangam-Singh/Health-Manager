@@ -86,7 +86,8 @@ async function main() {
   console.log(`  3. release (${del.status}) returns slot → ${returned ? "yes ✅" : "no ❌"}`);
 
   // --- 4. an EXPIRED hold must not lock the slot -------------------------
-  const again = await hold(a);
+  const rehold = await hold(a);
+  console.log(`  4. re-held by patient A     → ${rehold.status}`);
   const db = new Client({ connectionString: process.env.DIRECT_URL });
   await db.connect();
   await db.query(`UPDATE "SlotHold" SET "expiresAt" = NOW() - INTERVAL '1 minute'`);
@@ -97,7 +98,7 @@ async function main() {
     `SELECT COUNT(*)::int n FROM "SlotHold" WHERE "doctorId"=$1 AND "startAt"=$2`,
     [target.doctorId, target.startAt]);
   await db.end();
-  console.log(`  4. once expired, slot reappears in availability → ${visible ? "yes ✅" : "no ❌"}`);
+  console.log(`     once expired, slot reappears → ${visible ? "yes ✅" : "no ❌"}`);
   console.log(`     another patient can claim it → ${stolen.status === 201 ? "yes ✅" : `no ❌ (${stolen.status})`}`);
   console.log(`     rows left on that slot: ${rows.rows[0].n} (must be 1, not 2)\n`);
 }

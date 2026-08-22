@@ -24,20 +24,21 @@ const j = async (r: Response) => ({ status: r.status, body: await r.json().catch
 
 async function main() {
   const cookie = await patient("flow@test.com");
-  const docs = (await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: cookie } })).json()).doctors;
+  const docs = ((await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: cookie } })).json()) as { doctors: { id: string }[] }).doctors;
 
-  let target: any = null;
+  type Target = { doctorId: string; startAt: string };
+  let target: Target | null = null;
   for (let i = 1; i <= 14 && !target; i++) {
     const date = new Date(Date.now() + i * 86400000).toISOString().slice(0, 10);
     for (const d of docs) {
-      const s = (await (await fetch(`${BASE}/api/doctors/${d.id}/slots?date=${date}`, { headers: { Cookie: cookie } })).json()).slots;
+      const s = ((await (await fetch(`${BASE}/api/doctors/${d.id}/slots?date=${date}`, { headers: { Cookie: cookie } })).json()) as { slots?: { startAt: string }[] }).slots;
       if (s?.length) { target = { doctorId: d.id, startAt: s[0].startAt }; break; }
     }
   }
-  console.log(`\n  slot: ${target.startAt}`);
+  console.log(`\n  slot: ${target!.startAt}`);
 
   const held = await j(await fetch(`${BASE}/api/holds`, { method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(target) }));
+    headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(target!) }));
   console.log(`  1. hold taken            → ${held.status} ${held.status === 201 ? "✅" : "❌"}`);
 
   const holdId = held.body.hold.id;
