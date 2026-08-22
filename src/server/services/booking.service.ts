@@ -60,3 +60,101 @@ export async function bookAppointment(input: {
     throw e; // unknown database error -> 500, never swallowed
   }
 }
+
+/**
+ * Convert a hold into a confirmed appointment.
+ *
+ * ONE transaction does all of this, or none of it:
+ *   1. verify the hold exists, belongs to this patient, and has not expired
+ *   2. delete the hold
+ *   3. create the appointment (the partial unique index still arbitrates)
+ *   4. queue notification rows for BOTH patient and doctor
+ *
+ * ==========================================================================
+ * GOLDEN RULE: NO NETWORK I/O INSIDE A TRANSACTION.
+ * ==========================================================================
+ * No email is sent here and no calendar API is called. Those are network
+ * operations that can hang for 30 seconds or fail outright, and doing them
+ * here would mean a mail server hiccup ROLLS BACK a valid appointment. It
+ * would also hold a database connection open for the duration.
+ *
+ * Instead the transaction writes Notification rows with status PENDING. A cron
+ * worker delivers them afterwards and retries on failure. The appointment is
+ * committed either way.
+ */
+export async function bookFromHold(input: { holdId: string; patientId: string }) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const hold = await tx.slotHold.findUnique({
+        where: { id: input.holdId },
+        include: {
+          doctor: {
+            select: {
+              id: true, slotDurationMin: true, timezone: true, specialisation: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
+          },
+          patient: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      // 404 rather than 403 for someone else's hold: see D17/Step 17.
+      if (!hold || hold.patientId !== input.patientId) {
+        throw new AppError("NOT_FOUND", "Hold not found");
+      }
+      if (hold.expiresAt <= new Date()) {
+        // Distinct message: the patient did nothing wrong, their time ran out.
+        throw new AppError("CONFLICT", "Your hold on this slot expired. Please pick a time again.");
+      }
+
+      await tx.slotHold.delete({ where: { id: hold.id } });
+
+      const appointment = await tx.appointment.create({
+        data: {
+          doctorId: hold.doctorId,
+          patientId: hold.patientId,
+          startAt: hold.startAt,
+          endAt: hold.endAt,
+          status: "CONFIRMED",
+        },
+      });
+
+      // The outbox. Nothing is sent; rows are written.
+      const payload = {
+        appointmentId: appointment.id,
+        startAt: appointment.startAt.toISOString(),
+        endAt: appointment.endAt.toISOString(),
+        timezone: hold.doctor.timezone,
+        doctorName: hold.doctor.user.name,
+        specialisation: hold.doctor.specialisation,
+        patientName: hold.patient.name,
+      };
+
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: hold.patientId,
+            type: "BOOKING_CONFIRMATION",
+            payload: { ...payload, audience: "PATIENT" },
+            // Deterministic key: retrying this booking can never queue a
+            // second copy of the same email.
+            idempotencyKey: `booking-confirmed:${appointment.id}:patient`,
+          },
+          {
+            userId: hold.doctor.user.id,
+            type: "BOOKING_CONFIRMATION",
+            payload: { ...payload, audience: "DOCTOR" },
+            idempotencyKey: `booking-confirmed:${appointment.id}:doctor`,
+          },
+        ],
+      });
+
+      return appointment;
+    });
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    const known = translateDbError(e as DbErrorLike);
+    if (known) throw known;
+    throw e;
+  }
+}

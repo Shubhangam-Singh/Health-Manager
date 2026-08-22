@@ -28,6 +28,7 @@ model User {
   doctorProfile DoctorProfile?
   appointments  Appointment[]
   slotHolds     SlotHold[]
+  notifications Notification[]
 
   @@index([role])
 }
@@ -199,4 +200,55 @@ model SlotHold {
   @@index([expiresAt])
   /// "Does this patient already hold something?"
   @@index([patientId])
+}
+
+/// OUTBOX. The business transaction writes a row here instead of sending
+/// anything. A cron worker (Step 25) picks up PENDING rows and delivers them.
+/// This is what keeps a mail server outage from rolling back a real booking.
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  channel NotificationChannel @default(EMAIL)
+  /// Everything the worker needs to render the message, captured at write
+  /// time. Stored rather than re-queried so a later edit cannot change the
+  /// content of an email that was already queued.
+  payload Json
+
+  status      NotificationStatus @default(PENDING)
+  attempts    Int                @default(0)
+  lastError   String?
+  /// Exponential backoff target. The worker only picks rows due now.
+  nextRetryAt DateTime?
+  sentAt      DateTime?
+
+  /// Makes retries safe: the same logical event can never be queued twice.
+  idempotencyKey String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The worker's query: pending and due.
+  @@index([status, nextRetryAt])
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  BOOKING_CANCELLED
+  APPOINTMENT_REMINDER
+  MEDICATION_REMINDER
+  DOCTOR_LEAVE_CANCELLATION
+}
+
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
 }
