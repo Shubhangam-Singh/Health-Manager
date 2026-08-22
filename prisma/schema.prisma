@@ -145,8 +145,11 @@ model Appointment {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  symptomForm     SymptomForm?
-  preVisitSummary PreVisitSummary?
+  symptomForm      SymptomForm?
+  preVisitSummary  PreVisitSummary?
+  visitNote        VisitNote?
+  prescription     Prescription?
+  postVisitSummary PostVisitSummary?
 
   /// Availability lookups: "what does this doctor have booked on this day?"
   @@index([doctorId, startAt])
@@ -323,4 +326,109 @@ enum Urgency {
   LOW
   MEDIUM
   HIGH
+}
+
+/// The doctor's clinical record of the consultation.
+model VisitNote {
+  id String @id @default(cuid())
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  clinicalNotes String
+  diagnosis     String?
+  followUpDays  Int?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model Prescription {
+  id String @id @default(cuid())
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  notes String?
+  items PrescriptionItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+/// STRUCTURED, not a free-text box. Reminders must be COMPUTED from frequency
+/// and duration, and you cannot compute a schedule from "take twice a day for
+/// a week" written in prose.
+model PrescriptionItem {
+  id String @id @default(cuid())
+
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  drugName     String
+  dose         String
+  frequency    Frequency
+  durationDays Int
+  instructions String?
+
+  reminders MedicationReminder[]
+}
+
+enum Frequency {
+  ONCE_DAILY
+  TWICE_DAILY
+  THRICE_DAILY
+  FOUR_TIMES_DAILY
+  EVERY_OTHER_DAY
+  WEEKLY
+  AS_NEEDED
+}
+
+/// One materialised row per dose. Rows rather than on-the-fly computation so
+/// each dose can be individually queued, retried, cancelled and audited.
+model MedicationReminder {
+  id String @id @default(cuid())
+
+  prescriptionItemId String
+  prescriptionItem   PrescriptionItem @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
+
+  scheduledAt DateTime           @db.Timestamptz(3)
+  status      ReminderStatus     @default(PENDING)
+  sentAt      DateTime?          @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  /// The dispatcher's query: due and not yet handled.
+  @@index([status, scheduledAt])
+  /// Stops a re-run of schedule generation duplicating a dose.
+  @@unique([prescriptionItemId, scheduledAt])
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
+/// Patient-friendly summary of the visit, same three-state pattern as the
+/// pre-visit summary.
+model PostVisitSummary {
+  id String @id @default(cuid())
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  status SummaryStatus @default(PENDING)
+
+  patientFriendlyText String?
+  medicationSchedule  String?
+  followUpSteps       String[]
+
+  rawModelOutput String?
+  promptVersion  String?
+  lastError      String?
+  attempts       Int      @default(0)
+  generatedAt    DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }

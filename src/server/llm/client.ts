@@ -8,7 +8,11 @@
  */
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
-const TIMEOUT_MS = 15_000;
+// 30s, not 15s. Every call site runs OUTSIDE the request path -- in after()
+// or in a cron job -- so nothing is waiting on this. The tighter budget was
+// chosen for a blocking call and made the longer post-visit prompt time out
+// while the model was still reasoning. Overridable for tuning.
+const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 30_000);
 const MAX_ATTEMPTS = 2; // one try, then one retry
 
 export type LlmResult =

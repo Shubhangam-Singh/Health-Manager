@@ -54,3 +54,11 @@ export function parseModelJson<T>(
   }
   return { ok: true, data: result.data };
 }
+
+export const postVisitSummarySchema = z.object({
+  patientFriendlyText: z.string().trim().min(1).max(1200),
+  medicationSchedule: z.string().trim().max(800),
+  followUpSteps: z.array(z.string().trim().min(1).max(300)).min(1).max(6),
+});
+
+export type PostVisitSummaryOutput = z.infer<typeof postVisitSummarySchema>;

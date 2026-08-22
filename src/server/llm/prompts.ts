@@ -79,3 +79,84 @@ export function buildPreVisitPrompt(input: {
     `Return the JSON object described in the schema.`,
   ].filter(Boolean).join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// POST-VISIT SUMMARY
+// ---------------------------------------------------------------------------
+
+export const POST_VISIT_PROMPT_VERSION = "post-visit@v1";
+
+/**
+ * Assignment baseline:
+ *
+ *   "Convert these clinical notes into a patient-friendly summary with
+ *    medication schedule and follow-up steps: <notes>"
+ *
+ * Improvements, each deliberate:
+ *
+ *  1. READING LEVEL stated explicitly. "Patient-friendly" is vague; a target
+ *     of plain English at roughly age 12 is actionable.
+ *  2. JARGON RULE. Told to translate clinical terms rather than drop them, so
+ *     a patient can still recognise the word on a letter or a pharmacy label.
+ *  3. NO NEW CLINICAL CONTENT. The model must not add advice, dosages or
+ *     warnings that the doctor did not write. This is the single most
+ *     important instruction in the whole prompt.
+ *  4. EXPLICIT JSON SCHEMA, since the output is parsed.
+ *  5. MEDICATION SCHEDULE is passed in ALREADY COMPUTED, as text. The model
+ *     rewrites it in plainer words but never derives times itself -- dose
+ *     arithmetic is done in code and unit-tested, not by a language model.
+ *  6. TONE. Calm and factual: this is read by someone who may be worried.
+ *  7. SAFETY NET. Told to include a line about seeking urgent care if things
+ *     worsen, without inventing specific red-flag symptoms.
+ */
+export const POST_VISIT_SYSTEM = `You rewrite a doctor's clinical notes into a summary the patient can understand.
+
+Write in plain English a 12-year-old could follow. Short sentences. No jargon:
+if a clinical term matters, give the everyday word and keep the medical one in
+brackets so the patient recognises it later.
+
+CRITICAL: do not add any clinical content the doctor did not write. No extra
+advice, no dosages, no warnings, no diagnoses of your own. If the notes do not
+say something, it does not appear in your summary.
+
+The medication schedule is given to you already worked out. Rephrase it more
+simply. Never calculate, change or invent timings or doses.
+
+Tone: calm and factual. The reader may be worried.
+
+Return ONLY a JSON object. No prose before or after. No markdown code fences.
+
+Schema:
+{
+  "patientFriendlyText": string,   // 3-5 short sentences, max 800 characters
+  "medicationSchedule": string,    // plain-English restatement, max 500 characters
+  "followUpSteps": string[]        // 2-4 concrete next steps, each max 200 characters
+}
+
+Always include one follow-up step advising the patient to seek urgent care if
+symptoms get significantly worse, without naming specific symptoms the doctor
+did not mention.`;
+
+export function buildPostVisitPrompt(input: {
+  clinicalNotes: string;
+  diagnosis?: string | null;
+  followUpDays?: number | null;
+  medications: { drugName: string; dose: string; schedule: string; durationDays: number; instructions?: string | null }[];
+}): string {
+  const meds = input.medications.length
+    ? input.medications
+        .map((m) => `- ${m.drugName} ${m.dose}, ${m.schedule}, for ${m.durationDays} day(s)${m.instructions ? ` (${m.instructions})` : ""}`)
+        .join("\n")
+    : "None prescribed.";
+
+  return [
+    `Clinical notes: ${input.clinicalNotes}`,
+    input.diagnosis ? `Diagnosis recorded: ${input.diagnosis}` : "",
+    input.followUpDays ? `Follow-up requested in: ${input.followUpDays} day(s)` : "",
+    ``,
+    `Medications (schedule already calculated — rephrase, do not recalculate):`,
+    meds,
+    ``,
+    `Return the JSON object described in the schema.`,
+  ].filter(Boolean).join("\n");
+}
