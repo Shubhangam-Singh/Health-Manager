@@ -503,3 +503,66 @@ endpoint written in a hurry all bypass it. A CHECK constraint binds every writer
 working hours and one leave day, then deleted only the `User` row. All five rows
 disappeared — cascading two levels, User → DoctorProfile → WorkingHour/LeaveDay,
 with no application code involved.
+
+---
+
+## Step 11 — Admin doctor CRUD
+
+**Built:** five endpoints under `/api/admin/doctors`, `doctor.service.ts`, and
+validation schemas. First real use of `requireRole("ADMIN")`, and the app's first
+database transaction.
+
+**Concepts that appeared:**
+
+- **REST: URLs name things, verbs say what you do to them.** `POST /doctors`, not
+  `POST /createDoctor` — the verb is already in the request.
+- **PUT vs PATCH.** PUT *replaces* the whole resource; PATCH *modifies* named
+  fields. PUT is idempotent — sending it five times leaves the same state as once.
+  Proved it: the same working-hours payload sent three times returned 3 rows every
+  time.
+- **Status codes as a vocabulary.** 201 with a `Location` header on create, 204 with
+  no body on delete, 400 malformed input, 401 unidentified, 403 identified and
+  refused, 404 missing, 409 conflicts with current state. All verified by curl.
+- **`params` is a Promise in Next 15** and must be awaited. It used to be a plain
+  object; forgetting the `await` hands you a Promise where a string was expected.
+- **The first transaction.** Creating a doctor writes to three tables — User,
+  DoctorProfile, WorkingHour. A User with role DOCTOR but no profile would be a
+  broken account that can log in and see nothing, so all three succeed or none do.
+- **bcrypt runs BEFORE the transaction opens.** Hashing costs ~100 ms of CPU, and
+  holding a database connection open during unrelated work starves the pool. Same
+  principle as never doing network I/O inside a transaction — the rule that matters
+  in Step 18.
+- **Filtering happens in SQL,** with `contains` + `mode: "insensitive"`, not by
+  fetching every doctor and filtering in JavaScript.
+- **Services throw domain errors, routes map them.** `getDoctor` throws
+  `AppError("NOT_FOUND")`; the route turns that into a 404 via `toErrorResponse`.
+  The service still knows nothing about HTTP.
+
+**Two bugs found by testing, both worth remembering.**
+
+*1. Stale Prisma client behind the singleton.* The first admin request 500'd with
+`Cannot read properties of undefined (reading 'findMany')`. The `globalThis` cache
+from Step 6 survives hot reload — which is the point — but it also survives
+`prisma generate`, so the running server still held a client built from the old
+schema with no `doctorProfile` model. A full restart fixed it. **After changing the
+schema, restart the dev server; hot reload is not enough.**
+
+*2. An empty PATCH silently corrupted data.* `PATCH {}` returned 200 and reset
+`slotDurationMin` from 45 to 30 — a field the request never mentioned. Cause:
+`updateDoctorSchema` was derived with `createDoctorSchema.pick().partial()`, and
+**both `.pick()` and `.partial()` preserve `.default(30)`**. So `{}` parsed to
+`{ slotDurationMin: 30 }`, the "at least one field" guard saw one key and passed, and
+the service wrote it. Fixed by declaring the PATCH schema from scratch with no
+defaults anywhere.
+
+> **A default turns "not mentioned" into "set it to this", which is the exact
+> opposite of PATCH semantics.**
+
+**Also improved:** zod 4's default message is a bare `"Invalid input"`, which tells an
+API client nothing. Every field now carries an explicit message, so a 400 response
+names what is wrong per field.
+
+**Noted for later:** `deleteDoctor` currently deletes the User and cascades away the
+profile, hours and leave. Once `Appointment` exists this becomes unsafe — medical
+records must survive a doctor leaving the clinic. That relation needs `Restrict`, and
+this turns into a soft delete. A comment in the service records this.

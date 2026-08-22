@@ -557,3 +557,82 @@ and by documenting the constraints in the README's schema section.
 double-booking is likewise inexpressible in Prisma. Establishing the
 `migrate dev --create-only` workflow here means the graded step introduces only the
 new idea, not the mechanics.
+
+---
+
+## D22 — Doctor creation is one transaction across three tables
+
+**Decision:** `createDoctor` opens a `prisma.$transaction` and writes `User`,
+`DoctorProfile` and the `WorkingHour` rows inside it. Password hashing happens
+**before** the transaction opens.
+
+**Alternatives considered:** three sequential writes with no transaction, relying on
+them all succeeding. They usually do — until a unique-constraint violation on the
+second write leaves a `User` with role DOCTOR and no profile: an account that can log
+in and see nothing, which no code path knows how to repair.
+
+**Why chosen:** these three rows are one fact — "this person is a doctor here". A
+partial write is not a smaller version of that fact, it is a corrupt one.
+
+**Why bcrypt is outside the transaction:** hashing costs ~100 ms of CPU and touches
+no database state. Holding a pooled connection open during it multiplies the
+transaction's lifetime for no reason, and connections are the scarce resource on a
+serverless free tier. Same rule as forbidding network I/O inside a transaction: **do
+slow, unrelated work first, then open the transaction and keep it short.**
+
+**Trade-off accepted:** if the request dies between hashing and the transaction, the
+hash is discarded and the work is wasted. Wasted CPU is strictly preferable to a
+half-created account.
+
+---
+
+## D23 — PATCH schemas are declared from scratch, never derived from create schemas
+
+**Decision:** `updateDoctorSchema` is written out explicitly with every field
+optional and **no defaults**, rather than derived via
+`createDoctorSchema.pick().partial()`.
+
+**Context — this was a live data-corruption bug, not a theoretical one.** The derived
+version looked correct and passed type checking. `PATCH {}` returned 200 and reset
+`slotDurationMin` from 45 to 30, a field the request never mentioned. `.pick()` and
+`.partial()` both **preserve `.default(30)`**, so an empty body parsed to
+`{ slotDurationMin: 30 }`; the "at least one field" guard counted one key and passed;
+the service wrote it.
+
+**Why chosen:** PATCH means "change exactly what I named". A default converts absence
+into an instruction, which inverts that meaning. The two schemas share field names but
+have genuinely different semantics, so sharing a definition couples things that must
+differ.
+
+**Trade-off accepted:** the validation rules for each field are stated twice, and they
+can drift. Accepted because the alternative silently overwrites data — a bug that
+surfaces as "the system changed a value nobody edited", which is close to
+untraceable in a live system.
+
+**Generalised rule:** any schema reachable by a partial update must contain no
+`.default()`. Defaults belong on create, where absence genuinely does mean "use the
+standard value".
+
+---
+
+## D24 — Working hours replaced wholesale via PUT, not edited individually
+
+**Decision:** `PUT /api/admin/doctors/:id/working-hours` takes the doctor's entire
+week and replaces it — delete-all then insert-all, inside one transaction. There is
+no endpoint to add or remove a single shift.
+
+**Alternatives considered:** REST-purist per-shift resources (`POST`, `DELETE
+/working-hours/:whId`). More granular, and a poor fit for the actual interaction: an
+admin edits a weekly schedule as one form and saves it once. Per-shift endpoints would
+mean the UI computing a diff and issuing several requests, with a half-applied
+schedule if one failed.
+
+**Why chosen:** the unit of change *is* the week. One request, one transaction, and
+the schedule is never partially applied. It is also genuinely idempotent — verified by
+sending the same payload three times and getting three identical results — so a retry
+after a timeout is always safe.
+
+**Trade-off accepted:** the whole week travels on every save, and two admins editing
+simultaneously means last-write-wins with no warning. At clinic scale the payload is
+trivial; concurrent schedule edits would need optimistic locking via a version column,
+which is noted as the scale-up path rather than built.
