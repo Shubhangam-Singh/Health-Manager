@@ -566,3 +566,55 @@ names what is wrong per field.
 profile, hours and leave. Once `Appointment` exists this becomes unsafe — medical
 records must survive a doctor leaving the clinic. That relation needs `Restrict`, and
 this turns into a soft delete. A comment in the service records this.
+
+---
+
+## Step 12 — generateSlots(), a pure function with unit tests
+
+**Built:** `slot.core.ts` (pure, zero imports, 16 unit tests), `slot.service.ts`
+(the database shell), and `DoctorProfile.timezone`.
+
+**Concepts that appeared:**
+
+- **A pure function's output depends only on its arguments and it changes nothing
+  outside itself.** Same inputs, same output, forever.
+- **Why `now` is a parameter.** The tempting version calls `Date.now()` internally.
+  That function cannot be tested: any assertion about "past slots are excluded"
+  passes today and fails tomorrow. Injecting `now` makes "it is 12:00 on 25 August
+  2026" just another argument.
+- **Functional core, imperative shell.** All the logic worth testing lives in a
+  function that needs no database; the database work is left trivial enough that it
+  needs no test.
+- **The timezone trap, and the schema gap it exposed.** `startMinute = 540` means
+  09:00 *clinic time*; `Appointment.startAt` will be a UTC instant. Converting
+  between them requires the clinic's zone, which the schema could not answer — this
+  was exactly the gap Step 10's second question pointed at. Added
+  `DoctorProfile.timezone`.
+- **Rule: store UTC, render local.**
+- **Why the conversion needs two passes.** A zone's offset depends on the instant,
+  and we are trying to *find* the instant. The first guess lands close enough that a
+  second offset lookup is correct even across a DST boundary. A naive
+  "subtract a fixed offset" gets one side of a DST change wrong.
+- **Slot boundary rule:** the loop condition tests the slot's END against closing
+  time, so 09:00–10:00 with 45-minute slots yields one slot, not two.
+
+**The bug that forced a better design.** After adding the database wrapper to the
+same file as the pure function, every test failed with
+`Cannot find package '@/server'`. Node has no idea what `@/` means — it is a
+TypeScript/bundler alias. The comment in that file claimed "functional core,
+imperative shell", but they were in one module, so importing the core dragged Prisma
+in with it.
+
+Splitting them into `slot.core.ts` (zero imports) and `slot.service.ts` made the
+separation real rather than aspirational. **A pure module that imports nothing cannot
+accidentally acquire a dependency** — and the test suite proves it on every run.
+
+**Tests: 16 passing, no test framework.** Node 24 runs `.ts` files natively, so
+`node --test` needed no vitest, jest or ts-node. Covered: slot spacing, wrong
+weekday, leave days, busy starts, past slots, minimum notice, split shifts, slots
+overrunning closing time, duplicates from overlapping shifts, and four DST cases.
+
+**The DST tests are the ones worth showing an interviewer.** A doctor's schedule row
+for "Monday 09:00" is identical all year, yet Monday 6 July resolves to 13:00 UTC and
+Monday 2 November to 14:00 UTC in New York. Also tested Asia/Kathmandu at UTC+5:45,
+which catches any code assuming whole-hour offsets.

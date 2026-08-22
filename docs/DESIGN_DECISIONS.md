@@ -636,3 +636,61 @@ after a timeout is always safe.
 simultaneously means last-write-wins with no warning. At clinic scale the payload is
 trivial; concurrent schedule edits would need optimistic locking via a version column,
 which is noted as the scale-up path rather than built.
+
+---
+
+## D25 — Slot generation is a pure function with `now` injected
+
+**Decision:** `generateSlots()` lives in `slot.core.ts`, takes every input as an
+argument — including the current time — and imports nothing at all. A separate
+`slot.service.ts` reads the database and calls it.
+
+**Alternatives considered:** the natural version, where the function queries
+appointments and leave itself and calls `Date.now()`. It reads well and is
+effectively untestable: it needs a live database in a known state, and any assertion
+about past slots passes today and fails tomorrow.
+
+**Why chosen:** this is the most logic-dense function in the project — weekday
+matching, timezone conversion, exclusions, boundary handling — and it is exactly the
+kind of code an interviewer probes with edge cases. Purity means every one of those
+cases is a test that runs in under a millisecond with no fixtures.
+
+**Enforced structurally, not by discipline.** The first attempt kept both halves in
+one file, and the tests immediately failed with `Cannot find package '@/server'` —
+importing the "pure" function pulled in Prisma. A module with **zero imports** cannot
+acquire a dependency by accident, and the test suite fails loudly if anyone adds one.
+
+**Trade-off accepted:** the caller must assemble the inputs, so the database query
+lives one level up and the two must agree on shape. Worth it — the coupling is
+explicit and visible in the type signature.
+
+---
+
+## D26 — `DoctorProfile.timezone`, and two-pass wall-clock conversion
+
+**Decision:** each doctor carries an IANA timezone. Converting a wall-clock time to a
+UTC instant computes the zone offset twice — once at a guessed instant, once at the
+corrected one.
+
+**Context:** `WorkingHour` stores minutes since midnight in clinic local time;
+`Appointment.startAt` stores a UTC instant. Without a timezone field, "09:00" is not
+a point in time at all, and the two tables cannot be reconciled.
+
+**Alternatives considered:** a single hardcoded clinic timezone, which fails the
+moment the clinic has a second location or a doctor consults remotely. Or storing a
+fixed numeric offset such as `+5:30`, which is wrong in any zone observing daylight
+saving — the offset is a property of an *instant*, not of a place.
+
+**Why two passes:** the offset depends on the instant, and the instant is what we are
+solving for. One pass is wrong for times near a DST boundary. Verified with
+America/New_York across the March 2026 transition: the identical schedule row
+resolves to 13:00 UTC in July and 14:00 UTC in November.
+
+**Trade-off accepted:** two `Intl.DateTimeFormat` constructions per slot, which is
+measurable but negligible at a day's worth of slots. A library such as Luxon would be
+faster and is the answer if this ever appears in a hot path.
+
+**Known edge case, deliberately not handled:** wall-clock times that do not exist,
+such as 02:30 on a spring-forward day. The conversion resolves them to the following
+real instant rather than rejecting them. Clinic hours in the seeded zones never fall
+inside a transition window, so the case is documented rather than coded around.
