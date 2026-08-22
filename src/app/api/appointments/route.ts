@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/server/lib/auth-guard";
 import { toErrorResponse } from "@/server/lib/http";
-import { bookAppointmentNaive } from "@/server/services/booking.service";
+import { bookAppointment } from "@/server/services/booking.service";
 
 const bookSchema = z.object({
   doctorId: z.string().min(1),
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const appointment = await bookAppointmentNaive({
+    const appointment = await bookAppointment({
       doctorId: parsed.data.doctorId,
       patientId: user.id,
       startAt: new Date(parsed.data.startAt),
