@@ -47,6 +47,8 @@ export async function getDoctorAppointment(doctorUserId: string, appointmentId: 
       patient: { select: { name: true, email: true, phone: true } },
       symptomForm: true,
       preVisitSummary: true,
+      visitNote: true,
+      prescription: { include: { items: true } },
     },
   });
   if (!appointment) throw new AppError("NOT_FOUND", "Appointment not found");

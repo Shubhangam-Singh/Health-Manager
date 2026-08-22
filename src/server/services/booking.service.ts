@@ -201,6 +201,8 @@ export async function listPatientAppointments(patientId: string) {
         select: { specialisation: true, timezone: true, user: { select: { name: true } } },
       },
       symptomForm: { select: { rawText: true, severity: true, durationDays: true } },
+      postVisitSummary: true,
+      prescription: { include: { items: true } },
     },
     orderBy: { startAt: "desc" },
   });

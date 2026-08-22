@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { getDoctorAppointment } from "@/server/services/appointment.service";
 import { AppError } from "@/server/lib/errors";
 import RegenerateSummary from "@/components/RegenerateSummary";
+import VisitNotesForm from "@/components/VisitNotesForm";
 
 const URGENCY: Record<string, string> = {
   HIGH: "bg-red-100 text-red-800 border-red-300",
@@ -25,6 +26,8 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
   const { timezone, appointment: a } = data;
   const form = a.symptomForm;
   const s = a.preVisitSummary;
+  const note = a.visitNote;
+  const meds = a.prescription?.items ?? [];
 
   const fmt = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone, weekday: "long", day: "numeric", month: "long",
@@ -111,6 +114,46 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
           </div>
         ) : (
           <p className="mt-3 text-sm text-gray-500">No symptom form was submitted.</p>
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------------
+          AFTER THE VISIT. Either the recorded notes, or the form to write
+          them. Submitting marks the appointment COMPLETED, materialises the
+          medication reminders and queues the patient-friendly summary.
+         ------------------------------------------------------------------ */}
+      <section className="mt-4 rounded border border-gray-200 p-4">
+        <h2 className="text-sm font-semibold">Visit notes and prescription</h2>
+        {note ? (
+          <div className="mt-3 space-y-2 text-sm">
+            <p className="whitespace-pre-wrap text-gray-800">{note.clinicalNotes}</p>
+            {note.diagnosis && (
+              <p><span className="text-gray-400">Diagnosis: </span>{note.diagnosis}</p>
+            )}
+            {note.followUpDays != null && (
+              <p><span className="text-gray-400">Follow-up in: </span>{note.followUpDays} day(s)</p>
+            )}
+            {meds.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Prescribed</p>
+                <ul className="mt-1 space-y-1">
+                  {meds.map((m) => (
+                    <li key={m.id}>
+                      <b>{m.drugName}</b> {m.dose} · {m.frequency.toLowerCase().replace(/_/g, " ")} · {m.durationDays} day(s)
+                      {m.instructions ? ` · ${m.instructions}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="pt-2 text-xs text-gray-400">
+              Saved. Re-submitting replaces the prescription and regenerates the
+              patient summary.
+            </p>
+            <VisitNotesForm appointmentId={a.id} />
+          </div>
+        ) : (
+          <VisitNotesForm appointmentId={a.id} />
         )}
       </section>
     </main>

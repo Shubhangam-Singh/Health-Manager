@@ -51,6 +51,43 @@ export default async function PatientAppointmentsPage() {
                   <span className="text-gray-400"> · severity {a.symptomForm.severity}/10</span>
                 </p>
               )}
+
+              {/* AFTER THE VISIT. Three states again: READY shows the plain
+                  English summary, PENDING says it is coming, FAILED still
+                  shows the prescription, which is the part that matters. */}
+              {a.postVisitSummary?.status === "READY" && (
+                <div className="mt-3 rounded bg-gray-50 p-3 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">After your visit</p>
+                  <p className="mt-1 text-gray-800">{a.postVisitSummary.patientFriendlyText}</p>
+                  {a.postVisitSummary.medicationSchedule && (
+                    <p className="mt-2 text-gray-700">
+                      <span className="text-gray-400">Medication: </span>
+                      {a.postVisitSummary.medicationSchedule}
+                    </p>
+                  )}
+                  {a.postVisitSummary.followUpSteps.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-gray-700">
+                      {a.postVisitSummary.followUpSteps.map((f, i) => <li key={i}>{f}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {a.postVisitSummary?.status === "PENDING" && (
+                <p className="mt-3 text-sm text-gray-400">Your visit summary is being prepared…</p>
+              )}
+
+              {a.prescription && a.prescription.items.length > 0 && (
+                <div className="mt-3 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Prescription</p>
+                  <ul className="mt-1 space-y-0.5 text-gray-700">
+                    {a.prescription.items.map((m) => (
+                      <li key={m.id}>
+                        <b>{m.drugName}</b> {m.dose} · {m.frequency.toLowerCase().replace(/_/g, " ")} · {m.durationDays} day(s)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           );
         })}
