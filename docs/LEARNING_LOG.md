@@ -987,3 +987,67 @@ checked is worse than no test.
 **Failure path verified with no API key set:** booking 201, appointment CONFIRMED,
 symptom form stored, summary `FAILED` with `lastError: "GEMINI_API_KEY is not set"`.
 Nothing crashed and the appointment is real.
+
+---
+
+## Step 22 — Doctor's pre-visit view and graceful degradation
+
+**Built:** `/doctor/appointments` and `/doctor/appointments/[id]`,
+`appointment.service.ts`, and the Regenerate button. Phase 4 complete.
+
+**Concepts that appeared:**
+
+- **Graceful degradation means deciding what the user sees when a part of the
+  system fails, before it fails.** The lazy version renders
+  `summary.chiefComplaint`; when generation failed that is `null`, so the doctor
+  gets a blank card and cannot tell whether the patient wrote nothing, the model
+  failed, or the page is broken.
+- **Three states, three renderings.** READY shows the urgency badge, chief
+  complaint, summary and questions. PENDING says it is being prepared. FAILED
+  explains why and offers Regenerate.
+- **The patient's own words are always rendered and never depend on the LLM.**
+  That is what makes the AI an *enhancement* rather than a *dependency*: a doctor
+  reading only that section is exactly as well informed as one at a clinic with no
+  AI at all.
+- **Ownership belongs in the query, not after it.**
+  `findFirst({ where: { id, doctorId } })` means another doctor's appointment simply
+  does not match — indistinguishable from one that does not exist, which is also the
+  right thing to tell the caller. Compare `findUnique({ where: { id } })` followed by
+  a check, which works until someone adds an early return above it. Verified: a
+  non-owning doctor gets 404 on both the page and the regenerate endpoint.
+- **Role is not ownership.** Being a doctor does not grant access to every
+  appointment; it must be *this* appointment's doctor. This is the answer to the
+  question raised in Step 8.
+
+**Two real bugs found by actually running it, both worth remembering.**
+
+*1. The model name had been retired.* `gemini-2.0-flash` returned HTTP 404, and
+Google's own error message named the replacement: *"Please update your code to use
+models/gemini-3.6-flash"*. `CLAUDE.md` warned to check the current flash model name
+in the docs — the API answered instead. The model is now overridable via
+`GEMINI_MODEL` so a future retirement is a config change, not a code change.
+
+*2. `maxOutputTokens: 800` truncated the JSON mid-string.* The failure surfaced as
+`invalid JSON: Unterminated string at position 121`. One look at the stored
+`rawModelOutput` showed the response cut off mid-sentence after 121 characters —
+newer flash models spend part of their output budget on internal reasoning before
+writing the answer. Raised to 4096.
+
+**That second one is the whole argument for storing `rawModelOutput`.** A validation
+error alone says "the JSON was bad". The stored output says "the JSON was bad
+*because it stopped mid-sentence*", which points straight at a token limit rather
+than at the prompt. Diagnosis took one query.
+
+**The pipeline working end to end,** on a realistic cardiac presentation:
+
+```
+URGENCY:         HIGH
+CHIEF COMPLAINT: Exertional central chest pain radiating to left arm and jaw
+                 with shortness of breath for four days.
+QUESTIONS:       1. Are you currently experiencing chest pain...
+                 2. How frequently are these episodes occurring...
+                 3. Have you had any associated symptoms such as...
+```
+
+The urgency is correct — exertional pain relieved by rest, radiating to arm and jaw,
+is a classic red-flag pattern. The prompt's explicit urgency guidance did that.

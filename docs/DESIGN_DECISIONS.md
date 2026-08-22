@@ -1031,3 +1031,59 @@ prompt is drifting.
 **Trade-off accepted:** storing `rawModelOutput` keeps model text containing patient
 symptoms in a second column. Justified because a prompt cannot be debugged from a
 validation error alone, and it is the same data already stored in `SymptomForm`.
+
+---
+
+## D38 — The AI summary is an enhancement over data that is already sufficient
+
+**Decision:** the doctor's view always renders the patient's raw symptom text,
+duration, severity, conditions and medications. The generated summary sits *above*
+that as an optional layer, with a distinct rendering for each of its three states.
+
+**Alternatives considered:** rendering the summary alone and treating a missing one
+as an empty state. Simpler, and it makes the clinic dependent on a third-party model
+being available at the moment a doctor opens an appointment. Or blocking the page
+until generation completes, which turns a model outage into an inability to see
+patient information before a consultation.
+
+**Why chosen:** the summary saves a doctor thirty seconds of reading. The symptom
+form is the clinical information itself. Those have different criticality, so they
+get different treatment: one may be absent, the other may not.
+
+**Trade-off accepted:** the page is longer and partly redundant when the summary is
+READY, since it restates what the summary condensed. Worth it — a doctor cross-checking
+an AI summary against the patient's own words is a feature, not duplication.
+
+**Concrete rule this produced:** no state renders as a blank space. FAILED says the
+summary could not be generated *and why*, PENDING says it is being prepared, and both
+point to the raw text below.
+
+---
+
+## D39 — Resource ownership is expressed in the query, not checked after it
+
+**Decision:** doctor-facing reads use
+`findFirst({ where: { id, doctorId: myProfileId } })`. There is no fetch-then-compare.
+
+**Alternatives considered:** `findUnique({ where: { id } })` followed by
+`if (appt.doctorId !== mine) throw`. It reads more explicitly and it is a check that
+can be skipped — by an early return added above it, by a new code path that forgets
+it, or by a refactor that moves the fetch and leaves the check behind. The database
+query cannot be partially applied.
+
+**Why chosen:** authentication says who you are, role authorisation says what kind of
+thing you may do, and **ownership says which rows** — the third is where healthcare
+systems actually leak, because the first two pass. A doctor reading another doctor's
+patient's symptoms is a real breach committed by a fully authorised user.
+
+Encoding it in the WHERE clause also produces the correct response for free: a row
+that does not match is indistinguishable from one that does not exist, so the caller
+gets 404 rather than a 403 that confirms the record is real.
+
+**Trade-off accepted:** every doctor-scoped query first resolves `userId` to
+`DoctorProfile.id`, an extra round trip. Cacheable later if it matters; correctness
+first.
+
+**Verified rather than assumed:** a doctor with no appointments requesting another
+doctor's appointment by direct URL receives 404 on the page and 404 from the
+regenerate endpoint, while the owning doctor receives 200.
