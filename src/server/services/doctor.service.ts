@@ -142,3 +142,54 @@ export async function deleteDoctor(id: string) {
 
   await prisma.user.delete({ where: { id: doctor.userId } });
 }
+
+/**
+ * PATIENT-FACING projection. Deliberately narrower than listDoctors(): a
+ * patient searching for a cardiologist has no business seeing every doctor's
+ * email address and phone number. Same table, different audience, different
+ * columns -- decided here, in the service, not left to the UI to remember.
+ */
+export async function searchDoctors(specialisation?: string) {
+  return prisma.doctorProfile.findMany({
+    // Filtering happens in SQL so the index on specialisation is used and only
+    // matching rows cross the network.
+    where: specialisation
+      ? { specialisation: { contains: specialisation, mode: "insensitive" } }
+      : undefined,
+    select: {
+      id: true,
+      specialisation: true,
+      slotDurationMin: true,
+      bio: true,
+      timezone: true,
+      user: { select: { name: true } },
+      _count: { select: { workingHours: true } },
+    },
+    orderBy: { specialisation: "asc" },
+  });
+}
+
+/** Distinct specialisations, for the filter dropdown. DISTINCT runs in SQL. */
+export async function listSpecialisations(): Promise<string[]> {
+  const rows = await prisma.doctorProfile.findMany({
+    distinct: ["specialisation"],
+    select: { specialisation: true },
+    orderBy: { specialisation: "asc" },
+  });
+  return rows.map((r) => r.specialisation);
+}
+
+/** Public view of one doctor. Throws NOT_FOUND so the route can map a 404. */
+export async function getDoctorPublic(id: string) {
+  const doctor = await prisma.doctorProfile.findUnique({
+    where: { id },
+    select: {
+      id: true, specialisation: true, slotDurationMin: true, bio: true,
+      timezone: true,
+      user: { select: { name: true } },
+      workingHours: { orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }] },
+    },
+  });
+  if (!doctor) throw new AppError("NOT_FOUND", "Doctor not found");
+  return doctor;
+}
