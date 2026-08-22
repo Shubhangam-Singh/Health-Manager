@@ -311,6 +311,7 @@ Identical steps and header, different URL and interval:
 |---|---|---|
 | Health Manager — reminders | `/api/cron/reminders` | every 5 minutes |
 | Health Manager — calendar | `/api/cron/calendar` | every 5 minutes |
+| Health Manager — summaries | `/api/cron/summaries` | every 15 minutes |
 | Health Manager — cleanup holds | `/api/cron/cleanup-holds` | every 15 minutes |
 
 ### 4.4 Verify

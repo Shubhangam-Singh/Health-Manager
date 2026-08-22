@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { listPatientAppointments } from "@/server/services/booking.service";
 import { Card, CardBody, PageHeader, ButtonLink, StatusBadge, EmptyState, Badge } from "@/components/ui";
 import { IconClipboard } from "@/components/icons";
+import CancelAppointment from "@/components/CancelAppointment";
 
 export const metadata = { title: "My appointments · Health Manager", description: "Past and upcoming appointments, summaries and prescriptions." };
 
@@ -93,6 +94,12 @@ export default async function PatientAppointmentsPage({ searchParams }: Props) {
                   </div>
                   <StatusBadge status={a.status} />
                 </div>
+
+                {a.status === "CONFIRMED" && isUpcoming(a.startAt) && (
+                  <div className="mt-3">
+                    <CancelAppointment appointmentId={a.id} />
+                  </div>
+                )}
 
                 {a.symptomForm && (
                   <div className="mt-4 border-t border-[var(--border)] pt-3">

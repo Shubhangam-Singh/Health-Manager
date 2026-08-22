@@ -6,6 +6,7 @@ import { Card, CardBody, PageHeader, StatusBadge, UrgencyBadge, Badge, Alert } f
 import RegenerateSummary from "@/components/RegenerateSummary";
 import VisitNotesForm from "@/components/VisitNotesForm";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import CancelAppointment from "@/components/CancelAppointment";
 
 export default async function DoctorAppointmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,7 +44,14 @@ export default async function DoctorAppointmentPage({ params }: { params: Promis
         <PageHeader
           title={a.patient.name}
           subtitle={`${fmt.format(a.startAt)} · ${a.patient.email}${a.patient.phone ? ` · ${a.patient.phone}` : ""}`}
-          action={<StatusBadge status={a.status} />}
+          action={
+            <div className="flex flex-col items-end gap-2">
+              <StatusBadge status={a.status} />
+              {a.status === "CONFIRMED" && (
+                <CancelAppointment appointmentId={a.id} label="Cancel this appointment" />
+              )}
+            </div>
+          }
         />
       </div>
 

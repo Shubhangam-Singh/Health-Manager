@@ -64,3 +64,72 @@ export async function cancelRemindersForAppointment(appointmentId: string) {
   });
   return count;
 }
+
+/**
+ * Queue "your appointment is tomorrow" reminders.
+ *
+ * Runs from the same cron as medication reminders. Looks for confirmed
+ * appointments starting inside the window and queues one notification for the
+ * patient and one for the doctor.
+ *
+ * The idempotencyKey is per (appointment, audience), so running this every
+ * five minutes for a whole day queues each reminder EXACTLY ONCE -- the unique
+ * index does the deduplication, not a "already reminded" flag we would have to
+ * remember to set.
+ */
+export async function queueAppointmentReminders(
+  now: Date = new Date(),
+  hoursAhead = 24,
+) {
+  const windowEnd = new Date(now.getTime() + hoursAhead * 3600 * 1000);
+
+  const due = await prisma.appointment.findMany({
+    where: {
+      status: "CONFIRMED",
+      startAt: { gte: now, lte: windowEnd },
+    },
+    include: {
+      patient: { select: { id: true, name: true } },
+      doctor: {
+        select: {
+          timezone: true, specialisation: true,
+          user: { select: { id: true, name: true } },
+        },
+      },
+    },
+    take: 200,
+  });
+
+  let queued = 0;
+
+  for (const a of due) {
+    const payload = {
+      appointmentId: a.id,
+      startAt: a.startAt.toISOString(),
+      timezone: a.doctor.timezone,
+      doctorName: a.doctor.user.name,
+      specialisation: a.doctor.specialisation,
+      patientName: a.patient.name,
+    };
+
+    await prisma.$transaction(async (tx) => {
+      await queueNotification(tx, {
+        userId: a.patientId,
+        type: "APPOINTMENT_REMINDER",
+        payload: { ...payload, audience: "PATIENT" },
+        idempotencyKey: `appt-reminder:${a.id}:patient`,
+      });
+      await queueNotification(tx, {
+        userId: a.doctor.user.id,
+        type: "APPOINTMENT_REMINDER",
+        payload: { ...payload, audience: "DOCTOR" },
+        idempotencyKey: `appt-reminder:${a.id}:doctor`,
+      });
+    });
+    queued += 2;
+  }
+
+  // `queued` counts attempts; duplicates are silently skipped by the unique
+  // index, so a second run in the same window inserts nothing.
+  return { appointments: due.length, attempted: queued };
+}

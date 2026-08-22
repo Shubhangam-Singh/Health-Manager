@@ -162,3 +162,41 @@ async function failPost(appointmentId: string, attempts: number, error: string, 
     update: data,
   });
 }
+
+/**
+ * Sweep summaries that are not READY and try again.
+ *
+ * Two gaps this closes:
+ *  - `after()` is best effort. If the serverless instance is torn down before
+ *    generation runs, the row stays PENDING for ever.
+ *  - A transient failure (a 429 from a free-tier quota, a timeout) leaves a
+ *    FAILED row that nothing would ever revisit, even though the next attempt
+ *    would likely succeed.
+ *
+ * Bounded by `maxAttempts` so a genuinely broken prompt is not retried
+ * indefinitely; those stay FAILED and visible, and a doctor can still press
+ * Regenerate by hand.
+ */
+export async function retryStuckSummaries(maxAttempts = 4, batchSize = 10) {
+  const [pre, post] = await Promise.all([
+    prisma.preVisitSummary.findMany({
+      where: { status: { in: ["PENDING", "FAILED"] }, attempts: { lt: maxAttempts } },
+      select: { appointmentId: true },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    }),
+    prisma.postVisitSummary.findMany({
+      where: { status: { in: ["PENDING", "FAILED"] }, attempts: { lt: maxAttempts } },
+      select: { appointmentId: true },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    }),
+  ]);
+
+  // Sequential, not parallel: the failure being retried is often a rate limit,
+  // and firing ten concurrent requests at a throttled API makes it worse.
+  for (const p of pre) await generatePreVisitSummary(p.appointmentId);
+  for (const p of post) await generatePostVisitSummary(p.appointmentId);
+
+  return { preVisitRetried: pre.length, postVisitRetried: post.length };
+}

@@ -307,6 +307,7 @@ and confirmation, and a distinct message when the hold has expired.
 |---|---|---|---|
 | `POST` | `/api/appointments/:id/visit-notes` | **that** doctor | Notes + structured prescription; materialises reminders |
 | `POST` | `/api/appointments/:id/summary` | that doctor, the patient, or admin | Regenerate the pre-visit summary |
+| `POST` | `/api/appointments/:id/cancel` | the patient **or** that doctor | Cancels, notifies the other party, stops medication reminders, removes calendar events. `409` if already cancelled or completed |
 
 ### Leave
 
@@ -330,7 +331,8 @@ Send `Authorization: Bearer <CRON_SECRET>` or `x-cron-secret: <CRON_SECRET>`.
 | Path | Does |
 |---|---|
 | `/api/cron/notifications` | Delivers due notifications with backoff |
-| `/api/cron/reminders` | Converts due medication doses into notifications |
+| `/api/cron/reminders` | Due medication doses **and** 24-hour appointment reminders |
+| `/api/cron/summaries` | Retries AI summaries stuck PENDING or FAILED |
 | `/api/cron/calendar` | Creates and deletes Google Calendar events |
 | `/api/cron/cleanup-holds` | Sweeps expired slot holds |
 
@@ -435,6 +437,7 @@ workaround is an external scheduler hitting the guarded endpoints.
 |---|---|
 | `https://<domain>/api/cron/notifications` | every 5 minutes |
 | `https://<domain>/api/cron/reminders` | every 5 minutes |
+| `https://<domain>/api/cron/summaries` | every 15 minutes |
 | `https://<domain>/api/cron/calendar` | every 5 minutes |
 | `https://<domain>/api/cron/cleanup-holds` | every 15 minutes |
 
@@ -481,16 +484,18 @@ Stated plainly rather than hidden.
 
 - **Refresh tokens are stored unencrypted.** In production they belong in a KMS or
   behind `pgcrypto`. Documented, not implemented.
-- **`after()` is best-effort.** If a serverless instance is torn down immediately, a
-  summary can remain `PENDING`. The regenerate endpoint covers this; a cron sweep for
-  stale `PENDING` rows is the proper fix.
+- **Gemini's free tier is rate limited.** Heavy testing exhausts it and summaries
+  return `429`. The system degrades correctly — the row is marked `FAILED`, the
+  doctor still sees the patient's own words, and `/api/cron/summaries` retries once
+  quota returns.
 - **JWT sessions cannot be revoked** before expiry, so a role change takes up to 8
   hours to take effect. Mitigated by the short `maxAge`; a `tokenVersion` column
   checked from cache is the scale-up path.
 - **Registration reveals whether an email exists** (it must, to be usable). The real
   fix is to always return `202` and move the answer into the email inbox, which needs
   the verification flow.
-- **No reschedule flow.** Cancel and rebook.
+- **No reschedule flow.** Cancel and rebook — cancellation is implemented and frees
+  the slot immediately, because the unique index is partial.
 - **Last-write-wins on concurrent schedule edits.** Two admins editing one doctor's
   week simultaneously need optimistic locking via a version column.
 - **Single light theme.** The app pins `color-scheme: light` rather than

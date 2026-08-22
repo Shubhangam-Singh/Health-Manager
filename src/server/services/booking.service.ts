@@ -3,7 +3,8 @@ import { AppError } from "@/server/lib/errors";
 import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { getAvailableSlots, isoDateInZone } from "./slot.service";
 import type { SymptomFormInput } from "@/server/validation/symptom.schema";
-import { queueCalendarEvents } from "./calendar.service";
+import { queueCalendarEvents, queueCalendarDeletion } from "./calendar.service";
+import { queueNotification } from "./notification.service";
 
 /**
  * Booking, with the guarantee where it belongs: in the database.
@@ -205,5 +206,84 @@ export async function listPatientAppointments(patientId: string) {
       prescription: { include: { items: true } },
     },
     orderBy: { startAt: "desc" },
+  });
+}
+
+/**
+ * Cancel an appointment. Either the patient or the appointment's own doctor
+ * may do it; anyone else gets NOT_FOUND rather than FORBIDDEN, so the response
+ * never confirms that someone else's appointment exists.
+ *
+ * ONE transaction: cancel the row, stop any outstanding medication reminders,
+ * queue a notification for the other party, and mark the calendar events for
+ * deletion. No email or calendar call happens here.
+ */
+export async function cancelAppointment(input: {
+  appointmentId: string;
+  userId: string;
+  reason?: string;
+}) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: input.appointmentId },
+    include: {
+      patient: { select: { id: true, name: true } },
+      doctor: {
+        select: {
+          timezone: true, specialisation: true,
+          user: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  const isPatient = appointment?.patientId === input.userId;
+  const isDoctor = appointment?.doctor.user.id === input.userId;
+  if (!appointment || (!isPatient && !isDoctor)) {
+    throw new AppError("NOT_FOUND", "Appointment not found");
+  }
+  if (appointment.status === "CANCELLED") {
+    throw new AppError("CONFLICT", "This appointment is already cancelled");
+  }
+  if (appointment.status === "COMPLETED") {
+    throw new AppError("CONFLICT", "This appointment has already taken place");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.appointment.update({
+      where: { id: input.appointmentId },
+      data: {
+        status: "CANCELLED",
+        cancelReason: isPatient ? "PATIENT_REQUEST" : "ADMIN",
+        cancelledAt: new Date(),
+      },
+    });
+
+    // A cancelled appointment must not keep dosing someone.
+    await tx.medicationReminder.updateMany({
+      where: { status: "PENDING", prescriptionItem: { prescription: { appointmentId: input.appointmentId } } },
+      data: { status: "CANCELLED" },
+    });
+
+    const payload = {
+      appointmentId: appointment.id,
+      startAt: appointment.startAt.toISOString(),
+      timezone: appointment.doctor.timezone,
+      doctorName: appointment.doctor.user.name,
+      specialisation: appointment.doctor.specialisation,
+      patientName: appointment.patient.name,
+      reason: input.reason,
+    };
+
+    // Tell the OTHER party. Whoever pressed cancel already knows.
+    await queueNotification(tx, {
+      userId: isPatient ? appointment.doctor.user.id : appointment.patientId,
+      type: "BOOKING_CANCELLED",
+      payload: { ...payload, audience: isPatient ? "DOCTOR" : "PATIENT" },
+      idempotencyKey: `booking-cancelled:${appointment.id}`,
+    });
+
+    await queueCalendarDeletion(tx, appointment.id);
+
+    return updated;
   });
 }
