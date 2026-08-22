@@ -1,13 +1,14 @@
 import { adminOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, Badge } from "@/components/ui";
+import { IconStethoscope, IconUsers, IconCalendar } from "@/components/icons";
 
 export default async function AdminDashboard() {
   const s = await adminOverview();
 
   const stats = [
-    { label: "Doctors", value: s.doctors },
-    { label: "Patients", value: s.patients },
-    { label: "Confirmed appointments", value: s.appointments },
+    { label: "Doctors", value: s.doctors, Icon: IconStethoscope },
+    { label: "Patients", value: s.patients, Icon: IconUsers },
+    { label: "Confirmed appointments", value: s.appointments, Icon: IconCalendar },
   ];
 
   // Delivery health: FAILED rows are kept rather than deleted precisely so
@@ -30,7 +31,12 @@ export default async function AdminDashboard() {
         {stats.map((x) => (
           <Card key={x.label}>
             <CardBody>
-              <p className="text-3xl font-semibold tracking-tight">{x.value}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-3xl font-semibold tracking-tight">{x.value}</p>
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-ink)]">
+                  <x.Icon />
+                </span>
+              </div>
               <p className="mt-1 text-sm text-[var(--text-muted)]">{x.label}</p>
             </CardBody>
           </Card>

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { doctorOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, EmptyState, Badge } from "@/components/ui";
+import { IconClock, IconCalendar, IconClipboard, IconAlert } from "@/components/icons";
 
 export default async function DoctorDashboard() {
   const session = await auth();
@@ -12,10 +13,10 @@ export default async function DoctorDashboard() {
   const { profile, today, upcoming, needingNotes, highUrgency } = data;
 
   const stats = [
-    { label: "In the next 24 hours", value: today },
-    { label: "Upcoming total", value: upcoming },
-    { label: "Awaiting your notes", value: needingNotes, tone: needingNotes > 0 },
-    { label: "Flagged high urgency", value: highUrgency, tone: highUrgency > 0 },
+    { label: "In the next 24 hours", value: today, Icon: IconClock },
+    { label: "Upcoming total", value: upcoming, Icon: IconCalendar },
+    { label: "Awaiting your notes", value: needingNotes, tone: needingNotes > 0, Icon: IconClipboard },
+    { label: "Flagged high urgency", value: highUrgency, tone: highUrgency > 0, Icon: IconAlert },
   ];
 
   return (
@@ -30,9 +31,15 @@ export default async function DoctorDashboard() {
         {stats.map((s) => (
           <Card key={s.label}>
             <CardBody>
-              <p className={`text-3xl font-semibold tracking-tight ${s.tone ? "text-[var(--danger)]" : ""}`}>
-                {s.value}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className={`text-3xl font-semibold tracking-tight ${s.tone ? "text-[var(--danger)]" : ""}`}>
+                  {s.value}
+                </p>
+                <span className={`grid h-8 w-8 place-items-center rounded-lg ${
+                  s.tone ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--brand-soft)] text-[var(--brand-ink)]"}`}>
+                  <s.Icon />
+                </span>
+              </div>
               <p className="mt-1 text-sm text-[var(--text-muted)]">{s.label}</p>
             </CardBody>
           </Card>

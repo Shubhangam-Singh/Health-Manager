@@ -1,15 +1,16 @@
 import { auth } from "@/auth";
 import { patientOverview } from "@/server/services/dashboard.service";
 import { Card, CardBody, PageHeader, ButtonLink, Badge, EmptyState } from "@/components/ui";
+import { IconCalendar, IconClipboard, IconPill } from "@/components/icons";
 
 export default async function PatientDashboard() {
   const session = await auth();
   const { upcoming, past, activeMeds, nextAppointment } = await patientOverview(session!.user.id);
 
   const stats = [
-    { label: "Upcoming appointments", value: upcoming },
-    { label: "Past appointments", value: past },
-    { label: "Active medication reminders", value: activeMeds },
+    { label: "Upcoming appointments", value: upcoming, Icon: IconCalendar },
+    { label: "Past appointments", value: past, Icon: IconClipboard },
+    { label: "Active medication reminders", value: activeMeds, Icon: IconPill },
   ];
 
   return (
@@ -24,7 +25,12 @@ export default async function PatientDashboard() {
         {stats.map((s) => (
           <Card key={s.label}>
             <CardBody>
-              <p className="text-3xl font-semibold tracking-tight">{s.value}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-3xl font-semibold tracking-tight">{s.value}</p>
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-ink)]">
+                  <s.Icon />
+                </span>
+              </div>
               <p className="mt-1 text-sm text-[var(--text-muted)]">{s.label}</p>
             </CardBody>
           </Card>

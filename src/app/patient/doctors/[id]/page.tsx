@@ -5,6 +5,8 @@ import { getAvailableSlots, isoDateInZone } from "@/server/services/slot.service
 import { AppError } from "@/server/lib/errors";
 import { Card, CardBody, PageHeader, Badge, BTN } from "@/components/ui";
 import SlotPicker from "@/components/SlotPicker";
+import DatePicker from "@/components/DatePicker";
+import { Suspense } from "react";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -68,9 +70,11 @@ export default async function DoctorAvailabilityPage({ params, searchParams }: P
                 <h2 className="text-sm font-semibold">{dayLabel}</h2>
                 <p className="text-xs text-[var(--text-muted)]">All times in {doctor.timezone}</p>
               </div>
-              <div className="flex gap-2">
-                <Link href={`?date=${addDays(date, -1)}`} className={BTN.secondary}>← Prev</Link>
-                <Link href={`?date=${addDays(date, 1)}`} className={BTN.secondary}>Next →</Link>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* useSearchParams needs a Suspense boundary in Next 15. */}
+                <Suspense fallback={null}><DatePicker date={date} /></Suspense>
+                <Link href={`?date=${addDays(date, -1)}`} className={BTN.secondary} aria-label="Previous day">←</Link>
+                <Link href={`?date=${addDays(date, 1)}`} className={BTN.secondary} aria-label="Next day">→</Link>
               </div>
             </div>
 
