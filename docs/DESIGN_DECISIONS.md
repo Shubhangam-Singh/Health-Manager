@@ -767,7 +767,7 @@ The booking service still checks availability first, then catches `P2002` and re
 
 - *Check-then-insert in application code.* Built deliberately in Step 14 and measured:
   10 concurrent requests produced **8 successful bookings for one slot**, created
-  across a 51 ms window. The check is truthful when made and stale when used — TOCTOUB
+  across a 51 ms window. The check is truthful when made and stale when used — TOCTOU
   again. No additional application code closes the gap, because the gap sits *between*
   statements rather than inside one.
 - *Pessimistic locking with `SELECT … FOR UPDATE`.* The textbook answer, and a poor
