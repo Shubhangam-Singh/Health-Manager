@@ -618,3 +618,51 @@ overrunning closing time, duplicates from overlapping shifts, and four DST cases
 for "Monday 09:00" is identical all year, yet Monday 6 July resolves to 13:00 UTC and
 Monday 2 November to 14:00 UTC in New York. Also tested Asia/Kathmandu at UTC+5:45,
 which catches any code assuming whole-hour offsets.
+
+---
+
+## Step 13 — Patient doctor search and slot grid
+
+**Built:** `/patient/doctors` (search) and `/patient/doctors/[id]` (availability),
+patient-facing service functions, and two API routes. Phase 2 complete.
+
+**Concepts that appeared:**
+
+- **A Server Component can call a service directly — no API route needed.** A page
+  that only reads data can `await` the service during render and send finished HTML.
+  The API route is a phone line between two rooms; standing in the kitchen, you do
+  not phone the kitchen.
+- **So why build the API routes at all?** For callers that are not our own
+  server-rendered pages, and for anything the browser must do *after* the page
+  loads — placing a hold, refreshing availability. Reads go direct; interactions get
+  an endpoint.
+- **Filter in SQL, not in JavaScript.** Fetching every doctor and calling `.filter()`
+  works at 20 doctors and fails at 5,000: every row crosses the network to be
+  discarded, and the `specialisation` index from Step 10 goes unused. `contains` with
+  `mode: "insensitive"` becomes `ILIKE` and the database does the work.
+- **`DISTINCT` also belongs in SQL.** The specialisation filter list uses Prisma's
+  `distinct`, not a JavaScript `Set` over every row.
+- **`searchParams` is a Promise in Next 15,** exactly like `params`.
+- **`Promise.all` avoids a waterfall.** Awaiting the two queries one after the other
+  would make the page wait for the sum of both round trips instead of the longer one.
+- **Different audiences get different projections.** `listDoctors` (admin) returns
+  email and phone; `searchDoctors` (patient) does not. That decision lives in the
+  service, not in the UI's memory.
+- **Store UTC, render local — seen working.** The API returns
+  `2026-08-29T03:30:00.000Z` and the page displays `09:00`, converted through
+  `DoctorProfile.timezone` with `Intl.DateTimeFormat`.
+
+**The result worth noticing:** `/patient/doctors` ships **170 B** of JavaScript. It
+has a search box, filter chips and navigation, and sends essentially no JS, because
+every interactive-looking element is a plain `<form>` or `<Link>`. A GET form sets
+`?q=…` and the server re-renders.
+
+**A moment that looked like a bug and was not.** Dr Priya works Saturday 09:00–11:00,
+and her page showed "no slots available" on a Saturday. The server clock read 12:12
+IST — every slot that day had already passed, and the past-slot filter from Step 12
+correctly removed them. The following Saturday showed exactly 8 slots, 09:00 to 10:45
+at 15-minute spacing, with nothing overrunning the 11:00 close.
+
+**Verified:** search lists 4 doctors, `?q=derm` narrows to Dr Anita Rao, an
+unauthenticated request redirects to `/login`, the slots API returns 400 for a
+malformed date, 404 for an unknown doctor, and 401 with no session.

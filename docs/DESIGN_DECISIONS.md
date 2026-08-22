@@ -694,3 +694,56 @@ faster and is the answer if this ever appears in a hot path.
 such as 02:30 on a spring-forward day. The conversion resolves them to the following
 real instant rather than rejecting them. Clinic hours in the seeded zones never fall
 inside a transition window, so the case is documented rather than coded around.
+
+---
+
+## D27 — Reads go through Server Components; API routes exist for interactions
+
+**Decision:** patient pages call services directly during server render.
+`GET /api/doctors` and `GET /api/doctors/:id/slots` exist alongside them, calling the
+same services, for callers that are not our own pages.
+
+**Alternatives considered:** the conventional SPA arrangement where every page is a
+Client Component that fetches from an API on mount. It is the familiar pattern and it
+costs a request waterfall — HTML, then JavaScript, then data, then a re-render — plus
+a loading state for every page and a public endpoint for every read.
+
+**Why chosen:** a read-only page has nothing a round trip through HTTP adds. Calling
+the service in the component removes the endpoint, the fetch, the loading state and
+the client bundle. Measured: `/patient/doctors` ships 170 B of JavaScript while
+providing search, filter chips and date navigation.
+
+The API routes are not redundant. Step 17 needs the browser to place a slot hold
+*after* the page has rendered, and that requires a real endpoint. Building the read
+endpoints now keeps the documented API surface complete for the README, which is a
+graded deliverable.
+
+**Trade-off accepted:** two callers per service — a page and a route — so a change in
+return shape must satisfy both. Contained because both call the same function rather
+than duplicating the query.
+
+---
+
+## D28 — Per-audience projections chosen in the service layer
+
+**Decision:** `listDoctors` (admin) returns each doctor's email and phone;
+`searchDoctors` (patient) returns name, specialisation, slot duration, bio and
+timezone, and nothing else.
+
+**Alternatives considered:** one query returning everything, with the UI rendering
+only what it should show. Common, and wrong: the data still crosses the network and
+sits in the HTML payload, so "not displayed" is not "not disclosed". A reader of the
+page source sees every doctor's personal phone number.
+
+**Why chosen:** the narrowest projection that satisfies the caller is both a
+performance decision and a privacy one, and it belongs where the query is written.
+Leaving it to the UI means the protection depends on every future component
+remembering.
+
+**Trade-off accepted:** near-duplicate query functions that must both be updated when
+a field is added. Accepted deliberately — the duplication is the point, because the
+two audiences should be free to diverge.
+
+**Extends to slots:** the slots endpoint returns only `startAt` and `endAt`. It never
+reveals who booked the surrounding slots, which would leak that a specific person has
+an appointment with a specific doctor.
