@@ -7,7 +7,12 @@
  * not answer" is a NORMAL outcome the caller must handle, not an exception.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+// gemini-2.5-flash, not a newer preview model. The free tier for
+// gemini-3.6-flash is 20 requests PER DAY, which a single demo session
+// exhausts. 2.5-flash has a far higher daily allowance and, being a
+// non-reasoning model, spends its whole output budget on the answer instead
+// of on internal thinking — which was truncating our JSON.
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 // 30s, not 15s. Every call site runs OUTSIDE the request path -- in after()
 // or in a cron job -- so nothing is waiting on this. The tighter budget was
 // chosen for a blocking call and made the longer post-visit prompt time out

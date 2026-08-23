@@ -81,7 +81,7 @@ Copy `.env.example` to `.env`. Every key, and what happens without it:
 | `AUTH_URL` | yes in prod | Canonical app URL. |
 | `CRON_SECRET` | **yes** | Guards `/api/cron/*`. Without it those endpoints refuse to run. |
 | `GEMINI_API_KEY` | no | LLM summaries. Without it summaries are `FAILED`; **booking is unaffected**. |
-| `GEMINI_MODEL` | no | Defaults to `gemini-3.6-flash`. Overridable when Google retires a model. |
+| `GEMINI_MODEL` | no | Defaults to `gemini-2.5-flash`. **Choose a model with a usable free-tier daily quota** — newer preview models such as `gemini-3.6-flash` allow only 20 requests per day, which one demo session exhausts. |
 | `LLM_TIMEOUT_MS` | no | Defaults to 30000. |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | no | SMTP. Without them email prints to the console instead. |
 | `MAIL_FROM` | no | From header. |
@@ -487,10 +487,11 @@ Stated plainly rather than hidden.
 
 - **Refresh tokens are stored unencrypted.** In production they belong in a KMS or
   behind `pgcrypto`. Documented, not implemented.
-- **Gemini's free tier is rate limited.** Heavy testing exhausts it and summaries
-  return `429`. The system degrades correctly — the row is marked `FAILED`, the
-  doctor still sees the patient's own words, and `/api/cron/summaries` retries once
-  quota returns.
+- **Gemini's free tier has a daily request cap.** Exhaust it and summaries return
+  `429`. The system degrades correctly — the row is marked `FAILED`, the doctor still
+  sees the patient's own words, and `/api/cron/summaries` retries once quota returns.
+  `gemini-2.5-flash` was chosen over newer preview models specifically because those
+  allow only 20 requests per day.
 - **JWT sessions cannot be revoked** before expiry, so a role change takes up to 8
   hours to take effect. Mitigated by the short `maxAge`; a `tokenVersion` column
   checked from cache is the scale-up path.
