@@ -17,8 +17,8 @@ export default async function DoctorDashboard() {
   const stats = [
     { label: "In the next 24 hours", value: today, Icon: IconClock },
     { label: "Upcoming total", value: upcoming, Icon: IconCalendar },
-    { label: "Awaiting your notes", value: needingNotes, tone: needingNotes > 0, Icon: IconClipboard },
-    { label: "Flagged high urgency", value: highUrgency, tone: highUrgency > 0, Icon: IconAlert },
+    { label: "Awaiting your notes", value: needingNotes, tone: (needingNotes ?? 0) > 0, Icon: IconClipboard },
+    { label: "Flagged high urgency", value: highUrgency, tone: (highUrgency ?? 0) > 0, Icon: IconAlert },
   ];
 
   return (
@@ -35,7 +35,7 @@ export default async function DoctorDashboard() {
             <CardBody>
               <div className="flex items-start justify-between gap-3">
                 <p className={`text-3xl font-semibold tracking-tight ${s.tone ? "text-[var(--danger)]" : ""}`}>
-                  {s.value}
+                  {s.value ?? "—"}
                 </p>
                 <span className={`grid h-8 w-8 place-items-center rounded-lg ${
                   s.tone ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--brand-soft)] text-[var(--brand-ink)]"}`}>
@@ -48,7 +48,7 @@ export default async function DoctorDashboard() {
         ))}
       </div>
 
-      {highUrgency > 0 && (
+      {(highUrgency ?? 0) > 0 && (
         <div className="mt-6">
           <Card className="border-[var(--danger)]">
             <CardBody className="flex flex-wrap items-center justify-between gap-3">
@@ -56,7 +56,7 @@ export default async function DoctorDashboard() {
                 <div className="flex items-center gap-2">
                   <Badge tone="danger">attention</Badge>
                   <p className="font-medium">
-                    {highUrgency} appointment{highUrgency > 1 ? "s" : ""} flagged high urgency
+                    {highUrgency} appointment{(highUrgency ?? 0) > 1 ? "s" : ""} flagged high urgency
                   </p>
                 </div>
                 <p className="mt-1 text-sm text-[var(--text-muted)]">

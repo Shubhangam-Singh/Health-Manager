@@ -28,11 +28,11 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         )}
         <div className="mt-5 flex justify-center gap-2">
           <button onClick={reset}
-            className="rounded-[8px] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-hover)]">
+            className="rounded-[8px] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-[var(--on-brand)] transition hover:bg-[var(--brand-hover)]">
             Try again
           </button>
           <Link href="/"
-            className="rounded-[8px] border border-[var(--border-strong)] bg-white px-4 py-2 text-sm font-medium transition hover:bg-gray-50">
+            className="rounded-[8px] border border-[var(--border-strong)] bg-[var(--surface)] px-4 py-2 text-sm font-medium transition hover:bg-[var(--bg-subtle)]">
             Go home
           </Link>
         </div>

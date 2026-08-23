@@ -11,7 +11,7 @@ export default function NotFound() {
           looks the same from here.
         </p>
         <Link href="/"
-          className="mt-5 inline-flex rounded-[8px] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-hover)]">
+          className="mt-5 inline-flex rounded-[8px] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-[var(--on-brand)] transition hover:bg-[var(--brand-hover)]">
           Go home
         </Link>
       </div>

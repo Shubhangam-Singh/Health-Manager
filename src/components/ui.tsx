@@ -44,7 +44,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 type Tone = "brand" | "neutral" | "ok" | "warn" | "danger";
 const TONES: Record<Tone, string> = {
   brand: "bg-[var(--brand-soft)] text-[var(--brand-ink)] border-[var(--brand-soft)]",
-  neutral: "bg-gray-100 text-gray-700 border-gray-200",
+  neutral: "bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)]",
   ok: "bg-[var(--ok-soft)] text-[var(--ok)] border-[var(--ok-soft)]",
   warn: "bg-[var(--warn-soft)] text-[var(--warn)] border-[var(--warn-soft)]",
   danger: "bg-[var(--danger-soft)] text-[var(--danger)] border-[var(--danger-soft)]",
@@ -60,10 +60,10 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
 
 const BTN_BASE = "inline-flex items-center justify-center gap-2 rounded-[8px] px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
 export const BTN = {
-  primary: cx(BTN_BASE, "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]"),
-  secondary: cx(BTN_BASE, "border border-[var(--border-strong)] bg-white text-[var(--text)] hover:bg-gray-50"),
-  ghost: cx(BTN_BASE, "text-[var(--text-muted)] hover:bg-gray-100 hover:text-[var(--text)]"),
-  danger: cx(BTN_BASE, "border border-[var(--danger)] bg-white text-[var(--danger)] hover:bg-[var(--danger-soft)]"),
+  primary: cx(BTN_BASE, "bg-[var(--brand)] text-[var(--on-brand)] hover:bg-[var(--brand-hover)]"),
+  secondary: cx(BTN_BASE, "border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--bg-subtle)]"),
+  ghost: cx(BTN_BASE, "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text)]"),
+  danger: cx(BTN_BASE, "border border-[var(--danger)] bg-[var(--surface)] text-[var(--danger)] hover:bg-[var(--danger-soft)]"),
 };
 
 export function ButtonLink({ href, children, variant = "primary" }: { href: string; children: ReactNode; variant?: keyof typeof BTN }) {
@@ -71,7 +71,7 @@ export function ButtonLink({ href, children, variant = "primary" }: { href: stri
 }
 
 export const INPUT =
-  "w-full rounded-[8px] border border-[var(--border-strong)] bg-white px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-subtle)]";
+  "w-full rounded-[8px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-subtle)]";
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -90,7 +90,7 @@ export function EmptyState({ title, hint, action, icon }: {
     <Card className="border-dashed">
       <div className="px-5 py-12 text-center">
         {icon && (
-          <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-gray-100 text-[var(--text-subtle)]">
+          <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-[var(--bg-subtle)] text-[var(--text-subtle)]">
             {icon}
           </div>
         )}

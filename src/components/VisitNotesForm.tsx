@@ -65,10 +65,10 @@ export default function VisitNotesForm({ appointmentId }: { appointmentId: strin
         placeholder="Clinical notes (what you observed, tests, plan)…" className={input} />
       <div className="flex gap-3">
         <input name="diagnosis" placeholder="Diagnosis (optional)" className={input} />
-        <input name="followUpDays" type="number" min={0} placeholder="Follow-up in days" className="w-48 rounded border border-gray-300 px-3 py-2 text-sm" />
+        <input name="followUpDays" type="number" min={0} placeholder="Follow-up in days" className="w-48 rounded border border-[var(--border-strong)] px-3 py-2 text-sm" />
       </div>
 
-      <div className="rounded-[8px] border border-[var(--border)] bg-gray-50 p-4">
+      <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
         <p className="text-sm font-semibold">Prescription</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
           Frequency and duration are structured, because medication reminders are

@@ -1,22 +1,36 @@
 @import "tailwindcss";
 
-/*
- * Design tokens. One light theme, stated explicitly: create-next-app's
- * prefers-color-scheme block turned body text near-white on our white cards.
- */
+/* ---------------------------------------------------------------------------
+ * THEME TOKENS
+ *
+ * Three states, deliberately:
+ *   1. :root                          — light, the default
+ *   2. @media (prefers-color-scheme: dark) with no explicit choice — follow OS
+ *   3. [data-theme="light"|"dark"]    — an explicit user choice always wins
+ *
+ * Every colour used by a component comes from a token. Hardcoding a Tailwind
+ * grey is what made the first attempt at dark mode render white text on white
+ * cards, so nothing here may be hardcoded.
+ * --------------------------------------------------------------------------- */
+
 :root {
   color-scheme: light;
 
   --bg: #f6f7f9;
+  --bg-subtle: #eef0f3;        /* replaces bg-gray-50 / bg-gray-100 */
   --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --skeleton: #e4e7ec;
+
   --border: #e4e7ec;
   --border-strong: #d0d5dd;
 
   --text: #111827;
   --text-muted: #667085;
   --text-subtle: #98a2b3;
+  --on-brand: #ffffff;
 
-  --brand: #0f766e;        /* teal-700 — calm, clinical, not corporate blue */
+  --brand: #0f766e;
   --brand-hover: #115e59;
   --brand-soft: #ccfbf1;
   --brand-ink: #134e4a;
@@ -31,6 +45,76 @@
   --radius: 10px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
   --shadow: 0 1px 3px rgba(16, 24, 40, .1), 0 1px 2px rgba(16, 24, 40, .06);
+}
+
+/* Dark values, defined once and reused by both the OS-preference block and
+   the explicit [data-theme="dark"] selector. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #0d1117;
+    --bg-subtle: #161b22;
+    --surface: #161b22;
+    --surface-raised: #1c2128;
+    --skeleton: #262c36;
+
+    --border: #262c36;
+    --border-strong: #363b45;
+
+    --text: #e6edf3;
+    --text-muted: #9198a1;
+    --text-subtle: #6e7681;
+    --on-brand: #ffffff;
+
+    --brand: #2dd4bf;
+    --brand-hover: #5eead4;
+    --brand-soft: #0f2e2b;
+    --brand-ink: #7dd3d0;
+
+    --danger: #ff7b72;
+    --danger-soft: #2d1618;
+    --warn: #e3b341;
+    --warn-soft: #2b2413;
+    --ok: #3fb950;
+    --ok-soft: #12261a;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow: 0 1px 3px rgba(0, 0, 0, .5), 0 1px 2px rgba(0, 0, 0, .4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0d1117;
+  --bg-subtle: #161b22;
+  --surface: #161b22;
+  --surface-raised: #1c2128;
+  --skeleton: #262c36;
+
+  --border: #262c36;
+  --border-strong: #363b45;
+
+  --text: #e6edf3;
+  --text-muted: #9198a1;
+  --text-subtle: #6e7681;
+  --on-brand: #ffffff;
+
+  --brand: #2dd4bf;
+  --brand-hover: #5eead4;
+  --brand-soft: #0f2e2b;
+  --brand-ink: #7dd3d0;
+
+  --danger: #ff7b72;
+  --danger-soft: #2d1618;
+  --warn: #e3b341;
+  --warn-soft: #2b2413;
+  --ok: #3fb950;
+  --ok-soft: #12261a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, .5), 0 1px 2px rgba(0, 0, 0, .4);
 }
 
 @theme inline {
@@ -49,13 +133,42 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Colours change instantly on toggle; motion is opt-out for people who ask. */
+@media (prefers-reduced-motion: no-preference) {
+  body { transition: background-color .15s ease, color .15s ease; }
+}
+
 ::placeholder { color: var(--text-subtle); opacity: 1; }
 
-/* Visible focus for keyboard users, on every interactive element. */
 :where(a, button, input, select, textarea):focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
-/* Native controls should not look alien next to the styled ones. */
 input, select, textarea, button { font: inherit; }
+
+/* Native date/time pickers render a black icon that vanishes on dark. */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(.7);
+}
+
+/* ---------------------------------------------------------------------------
+ * Route-change progress bar. Next gives no built-in signal for "a server
+ * component is being fetched", so the shell drives this with a class on <html>.
+ * --------------------------------------------------------------------------- */
+#route-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  width: 0;
+  background: var(--brand);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+}
+html.route-loading #route-progress {
+  opacity: 1;
+  width: 90%;
+  transition: width 8s cubic-bezier(.1, .8, .2, 1);
+}

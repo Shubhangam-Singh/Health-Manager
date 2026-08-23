@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import SignOutButton from "./SignOutButton";
+import ThemeToggle from "./ThemeToggle";
 import NavLink from "./NavLink";
 import { IconHome, IconSearch, IconCalendar, IconClipboard, IconUsers, IconStethoscope } from "./icons";
 
@@ -34,9 +35,14 @@ export default async function AppShell({ children }: { children: React.ReactNode
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-6 px-5 py-3">
-          <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand)] text-sm font-bold text-white">H</span>
-            <span className="hidden sm:inline">Health Manager</span>
+          <Link href="/" className="flex shrink-0 items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--on-brand)]">
+              H
+            </span>
+            <span className="hidden leading-tight sm:block">
+              <span className="block font-semibold tracking-tight">Health Manager</span>
+              <span className="block text-[10px] text-[var(--text-subtle)]">by Shubhangam</span>
+            </span>
           </Link>
 
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
@@ -55,6 +61,7 @@ export default async function AppShell({ children }: { children: React.ReactNode
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-ink)]">
               {initials}
             </span>
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </div>

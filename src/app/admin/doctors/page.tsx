@@ -45,7 +45,7 @@ export default async function AdminDoctorsPage() {
                     <span className="text-xs text-[var(--text-subtle)]">No working hours set</span>
                   )}
                   {d.workingHours.map((w) => (
-                    <span key={w.id} className="rounded-md bg-gray-100 px-2 py-1 text-xs text-[var(--text-muted)]">
+                    <span key={w.id} className="rounded-md bg-[var(--bg-subtle)] px-2 py-1 text-xs text-[var(--text-muted)]">
                       {DAYS[w.dayOfWeek]} {hhmm(w.startMinute)}–{hhmm(w.endMinute)}
                     </span>
                   ))}

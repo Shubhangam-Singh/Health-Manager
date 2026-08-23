@@ -73,7 +73,7 @@ export default function LeaveManager({ doctorId, timezone }: { doctorId: string;
       </div>
 
       {checked && (
-        <div className="rounded-[8px] border border-[var(--border)] bg-gray-50 p-3">
+        <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
           {checked.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">
               No appointments on this date. Recording leave will affect nobody.

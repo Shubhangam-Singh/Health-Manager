@@ -49,7 +49,7 @@ export default async function PatientAppointmentsPage({ searchParams }: Props) {
             <Link key={t.label} href={t.key ? `?show=${t.key}` : "/patient/appointments"}
               className={`rounded-full border px-3.5 py-1.5 text-xs transition ${active
                 ? "border-[var(--brand)] bg-[var(--brand-soft)] font-medium text-[var(--brand-ink)]"
-                : "border-[var(--border-strong)] bg-white text-[var(--text-muted)] hover:bg-gray-50"}`}>
+                : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]"}`}>
               {t.label} <span className="tabular-nums opacity-70">{t.n}</span>
             </Link>
           );

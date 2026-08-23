@@ -28,7 +28,7 @@ export default async function PatientDashboard() {
           <Card key={s.label}>
             <CardBody>
               <div className="flex items-start justify-between gap-3">
-                <p className="text-3xl font-semibold tracking-tight">{s.value}</p>
+                <p className="text-3xl font-semibold tracking-tight">{s.value ?? "—"}</p>
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-ink)]">
                   <s.Icon />
                 </span>

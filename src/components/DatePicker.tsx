@@ -21,7 +21,7 @@ export default function DatePicker({ date }: { date: string }) {
         next.set("date", e.target.value);
         router.push(`?${next.toString()}`);
       }}
-      className="rounded-[8px] border border-[var(--border-strong)] bg-white px-3 py-1.5 text-sm tabular-nums"
+      className="rounded-[8px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-1.5 text-sm tabular-nums"
     />
   );
 }

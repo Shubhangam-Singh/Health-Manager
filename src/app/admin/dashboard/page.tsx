@@ -17,8 +17,8 @@ export default async function AdminDashboard() {
   // that an operator can see what was never delivered.
   const health = [
     { label: "Notifications queued", value: s.pendingNotifications, bad: false },
-    { label: "Notifications failed", value: s.failedNotifications, bad: s.failedNotifications > 0 },
-    { label: "AI summaries failed", value: s.failedSummaries, bad: s.failedSummaries > 0 },
+    { label: "Notifications failed", value: s.failedNotifications, bad: (s.failedNotifications ?? 0) > 0 },
+    { label: "AI summaries failed", value: s.failedSummaries, bad: (s.failedSummaries ?? 0) > 0 },
   ];
 
   return (
@@ -34,7 +34,7 @@ export default async function AdminDashboard() {
           <Card key={x.label}>
             <CardBody>
               <div className="flex items-start justify-between gap-3">
-                <p className="text-3xl font-semibold tracking-tight">{x.value}</p>
+                <p className="text-3xl font-semibold tracking-tight">{x.value ?? "—"}</p>
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-ink)]">
                   <x.Icon />
                 </span>
@@ -51,7 +51,7 @@ export default async function AdminDashboard() {
           <div className="grid gap-4 sm:grid-cols-3">
             {health.map((h) => (
               <div key={h.label}>
-                <p className={`text-2xl font-semibold ${h.bad ? "text-[var(--danger)]" : ""}`}>{h.value}</p>
+                <p className={`text-2xl font-semibold ${h.bad ? "text-[var(--danger)]" : ""}`}>{h.value ?? "—"}</p>
                 <p className="mt-0.5 text-sm text-[var(--text-muted)]">{h.label}</p>
               </div>
             ))}

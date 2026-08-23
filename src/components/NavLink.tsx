@@ -17,7 +17,7 @@ export default function NavLink({ href, label, children }: { href: string; label
       className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition ${
         active
           ? "bg-[var(--brand-soft)] font-medium text-[var(--brand-ink)]"
-          : "text-[var(--text-muted)] hover:bg-gray-100 hover:text-[var(--text)]"
+          : "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text)]"
       }`}>
       {children}
       <span className="hidden sm:inline">{label}</span>

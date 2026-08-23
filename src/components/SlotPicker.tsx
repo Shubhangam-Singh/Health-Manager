@@ -57,7 +57,7 @@ export default function SlotPicker({ doctorId, slots }: { doctorId: string; slot
             <button
               onClick={() => hold(s.startAt)}
               disabled={pending || selected !== null}
-              className="w-full rounded-[8px] border border-[var(--border-strong)] bg-white px-3 py-2 text-sm font-medium tabular-nums transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand-ink)] disabled:opacity-40"
+              className="w-full rounded-[8px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-sm font-medium tabular-nums transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand-ink)] disabled:opacity-40"
             >
               {selected === s.startAt ? "Holding…" : s.label}
             </button>

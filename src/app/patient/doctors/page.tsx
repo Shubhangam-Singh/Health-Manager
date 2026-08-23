@@ -31,14 +31,14 @@ export default async function DoctorSearchPage({ searchParams }: Props) {
         <Link href="/patient/doctors"
           className={`rounded-full border px-3 py-1 text-xs transition ${!q
             ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-ink)]"
-            : "border-[var(--border-strong)] bg-white text-[var(--text-muted)] hover:bg-gray-50"}`}>
+            : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]"}`}>
           All
         </Link>
         {specialisations.map((s) => (
           <Link key={s} href={`/patient/doctors?q=${encodeURIComponent(s)}`}
             className={`rounded-full border px-3 py-1 text-xs transition ${q === s
               ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-ink)]"
-              : "border-[var(--border-strong)] bg-white text-[var(--text-muted)] hover:bg-gray-50"}`}>
+              : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]"}`}>
             {s}
           </Link>
         ))}

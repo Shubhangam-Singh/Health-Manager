@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function HomePage() {
   const session = await auth();
@@ -37,13 +38,21 @@ export default async function HomePage() {
     <div className="min-h-screen">
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <span className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--brand)] text-xs font-bold text-white">H</span>
-            Health Manager
+          <span className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--on-brand)]">
+              H
+            </span>
+            <span className="leading-tight">
+              <span className="block font-semibold tracking-tight">Health Manager</span>
+              <span className="block text-[10px] text-[var(--text-subtle)]">by Shubhangam</span>
+            </span>
           </span>
-          <Link href="/login" className="text-sm font-medium text-[var(--brand)] hover:underline">
-            Sign in
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link href="/login" className="text-sm font-medium text-[var(--brand)] hover:underline">
+              Sign in
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -58,10 +67,10 @@ export default async function HomePage() {
             and let reminders take care of the rest.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/register" className="inline-flex items-center rounded-[8px] bg-[var(--brand)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-hover)]">
+            <Link href="/register" className="inline-flex items-center rounded-[8px] bg-[var(--brand)] px-5 py-2.5 text-sm font-medium text-[var(--on-brand)] transition hover:bg-[var(--brand-hover)]">
               Create a patient account
             </Link>
-            <Link href="/login" className="inline-flex items-center rounded-[8px] border border-[var(--border-strong)] bg-white px-5 py-2.5 text-sm font-medium transition hover:bg-gray-50">
+            <Link href="/login" className="inline-flex items-center rounded-[8px] border border-[var(--border-strong)] bg-[var(--surface)] px-5 py-2.5 text-sm font-medium transition hover:bg-[var(--bg-subtle)]">
               Sign in
             </Link>
           </div>
@@ -81,7 +90,7 @@ export default async function HomePage() {
           <ol className="mt-5 grid gap-5 sm:grid-cols-4">
             {steps.map((s, i) => (
               <li key={s.title} className="relative">
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--brand)] text-xs font-semibold text-white">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--brand)] text-xs font-semibold text-[var(--on-brand)]">
                   {i + 1}
                 </span>
                 <h3 className="mt-3 text-sm font-semibold">{s.title}</h3>
