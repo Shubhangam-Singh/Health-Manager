@@ -96,7 +96,11 @@ export default async function PatientAppointmentsPage({ searchParams }: Props) {
                 </div>
 
                 {a.status === "CONFIRMED" && isUpcoming(a.startAt) && (
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-4">
+                    <Link href={`/patient/appointments/${a.id}/reschedule`}
+                      className="text-sm font-medium text-[var(--brand)] hover:underline">
+                      Reschedule
+                    </Link>
                     <CancelAppointment appointmentId={a.id} />
                   </div>
                 )}

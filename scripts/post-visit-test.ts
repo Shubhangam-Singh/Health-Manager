@@ -28,7 +28,7 @@ async function main() {
   let appt = row;
   if (!appt) {
     // Nothing live (the leave test cancels things), so book one first.
-    const patient = await login("you@test.com", "correcthorsebattery");
+    const patient = await login("asha@example.test", "patient12345");
     const docs = ((await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: patient } })).json()) as
       { doctors: { id: string }[] }).doctors;
     let t: { doctorId: string; startAt: string } | null = null;
@@ -56,7 +56,7 @@ async function main() {
   }
   const row2 = appt;
 
-  const doctor = await login(row2.doctor_email, "doctorpassword123");
+  const doctor = await login(row2.doctor_email, "doctor12345");
 
   const res = await fetch(`${BASE}/api/appointments/${row2.id}/visit-notes`, {
     method: "POST", headers: { "Content-Type": "application/json", Cookie: doctor },

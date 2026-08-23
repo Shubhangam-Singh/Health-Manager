@@ -487,9 +487,10 @@ model CalendarEvent {
 }
 
 enum CalendarEventStatus {
-  PENDING     // queued, not yet created in Google
-  SYNCED      // exists in Google
+  PENDING        // queued, not yet created in Google
+  SYNCED         // exists in Google
+  UPDATE_PENDING // times changed; the existing event must be patched
   DELETE_PENDING // must be removed from Google
-  DELETED     // removed
-  FAILED      // gave up; visible to an admin
+  DELETED        // removed
+  FAILED         // gave up; visible to an admin
 }

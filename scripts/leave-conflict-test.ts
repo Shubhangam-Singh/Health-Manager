@@ -27,8 +27,8 @@ async function login(email: string, password: string) {
 }
 
 async function main() {
-  const admin = await login("admin@test.com", "adminpassword123");
-  const patient = await login("you@test.com", "correcthorsebattery");
+  const admin = await login("admin@clinic.test", "admin12345");
+  const patient = await login("asha@example.test", "patient12345");
 
   const docs = ((await (await fetch(`${BASE}/api/doctors`, { headers: { Cookie: patient } })).json()) as
     { doctors: { id: string; user: { name: string } }[] }).doctors;

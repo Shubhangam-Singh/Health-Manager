@@ -308,6 +308,7 @@ and confirmation, and a distinct message when the hold has expired.
 | `POST` | `/api/appointments/:id/visit-notes` | **that** doctor | Notes + structured prescription; materialises reminders |
 | `POST` | `/api/appointments/:id/summary` | that doctor, the patient, or admin | Regenerate the pre-visit summary |
 | `POST` | `/api/appointments/:id/cancel` | the patient **or** that doctor | Cancels, notifies the other party, stops medication reminders, removes calendar events. `409` if already cancelled or completed |
+| `POST` | `/api/appointments/:id/reschedule` | the patient **or** that doctor | `{ startAt }`. Moves the appointment, keeping its id and all attached records. Notifies both parties and **patches** the calendar event rather than recreating it. `409` if the new slot is taken or unavailable |
 
 ### Leave
 
@@ -471,6 +472,8 @@ node --env-file=.env scripts/booking-flow-test.ts       # hold -> appointment ->
 node --env-file=.env scripts/leave-conflict-test.ts     # dry run, then confirm
 node --env-file=.env scripts/notification-retry-test.ts # backoff to FAILED
 node --env-file=.env scripts/post-visit-test.ts         # notes -> reminders -> summary
+node --env-file=.env scripts/cancel-test.ts             # cancel, notify, free the slot
+node --env-file=.env scripts/reschedule-test.ts         # move, keep records, patch calendar
 node --env-file=.env scripts/e2e-test.ts                # 16 assertions, whole journey
 ```
 
@@ -494,8 +497,10 @@ Stated plainly rather than hidden.
 - **Registration reveals whether an email exists** (it must, to be usable). The real
   fix is to always return `202` and move the answer into the email inbox, which needs
   the verification flow.
-- **No reschedule flow.** Cancel and rebook — cancellation is implemented and frees
-  the slot immediately, because the unique index is partial.
+- **Reschedule keeps the same appointment row** rather than cancel-and-rebook, so
+  the symptom form, summaries, notes and prescription stay attached and the Google
+  Calendar event is patched instead of deleted and recreated — which preserves the
+  attendee's own reminders on it.
 - **Last-write-wins on concurrent schedule edits.** Two admins editing one doctor's
   week simultaneously need optimistic locking via a version column.
 - **Single light theme.** The app pins `color-scheme: light` rather than

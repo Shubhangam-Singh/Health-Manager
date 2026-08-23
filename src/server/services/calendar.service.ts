@@ -28,6 +28,23 @@ export async function queueCalendarEvents(
   });
 }
 
+/**
+ * Times changed. The event already exists in Google, so it is PATCHED rather
+ * than deleted and recreated — recreating would drop the attendee's own
+ * reminders and any notes they added to it.
+ */
+export async function queueCalendarUpdate(
+  tx: Prisma.TransactionClient,
+  appointmentId: string,
+) {
+  await tx.calendarEvent.updateMany({
+    where: { appointmentId, status: { in: ["SYNCED", "UPDATE_PENDING"] } },
+    data: { status: "UPDATE_PENDING", attempts: 0, lastError: null },
+  });
+  // Anything still PENDING has not been created yet, so it will simply be
+  // created with the new times when the worker gets to it.
+}
+
 /** Mark a booking's events for deletion. The worker removes them from Google. */
 export async function queueCalendarDeletion(
   tx: Prisma.TransactionClient,
@@ -41,18 +58,18 @@ export async function queueCalendarDeletion(
 
 export type CalendarReport = {
   configured: boolean;
-  created: number; deleted: number; skipped: number; failed: number;
+  created: number; updated: number; deleted: number; skipped: number; failed: number;
 };
 
 /** One worker pass: create pending events and delete those marked for removal. */
 export async function syncCalendarEvents(batchSize = 20): Promise<CalendarReport> {
   const report: CalendarReport = {
-    configured: isCalendarConfigured(), created: 0, deleted: 0, skipped: 0, failed: 0,
+    configured: isCalendarConfigured(), created: 0, updated: 0, deleted: 0, skipped: 0, failed: 0,
   };
   if (!report.configured) return report; // no credentials: nothing to do, no error
 
   const rows = await prisma.calendarEvent.findMany({
-    where: { status: { in: ["PENDING", "DELETE_PENDING"] }, attempts: { lt: MAX_ATTEMPTS } },
+    where: { status: { in: ["PENDING", "UPDATE_PENDING", "DELETE_PENDING"] }, attempts: { lt: MAX_ATTEMPTS } },
     take: batchSize,
     orderBy: { createdAt: "asc" },
     include: {
@@ -82,7 +99,21 @@ export async function syncCalendarEvents(batchSize = 20): Promise<CalendarReport
     const a = row.appointment;
 
     try {
-      if (row.status === "DELETE_PENDING") {
+      if (row.status === "UPDATE_PENDING" && row.googleEventId) {
+        // Patch only the times; everything else the attendee sees is preserved.
+        await calendar.events.patch({
+          calendarId: "primary",
+          eventId: row.googleEventId,
+          requestBody: {
+            start: { dateTime: a.startAt.toISOString(), timeZone: a.doctor.timezone },
+            end: { dateTime: a.endAt.toISOString(), timeZone: a.doctor.timezone },
+          },
+        });
+        await prisma.calendarEvent.update({
+          where: { id: row.id }, data: { status: "SYNCED", lastError: null },
+        });
+        report.updated++;
+      } else if (row.status === "DELETE_PENDING") {
         if (row.googleEventId) {
           await calendar.events.delete({ calendarId: "primary", eventId: row.googleEventId });
         }

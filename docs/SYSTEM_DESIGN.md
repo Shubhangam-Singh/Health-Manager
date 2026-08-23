@@ -50,8 +50,8 @@ transaction.
 I used Postgres rather than Redis with a TTL. Redis gives automatic expiry, but it
 puts the hold and the appointment in **different systems**, so converting one to the
 other could no longer be atomic — reintroducing the exact failure the design removes.
-**Trade-off accepted:** Postgres has no TTL, so expiry is mine to implement, and an
-expired row still occupies the unique key. It is handled twice: lazily when someone
+**Trade-off accepted:** Postgres has no TTL, so expiry is mine to implement, and a stale
+row still occupies the unique key. It is handled twice: lazily when someone
 claims that slot, and by a cron sweep for slots nobody retries. Redis is the scale-up
 path once hold churn becomes a write-throughput problem.
 
@@ -92,10 +92,10 @@ Every notification carries a deterministic `idempotencyKey` such as
 `booking-confirmed:<appointmentId>:patient`, unique in the database, so a retried
 operation can never queue a duplicate.
 
-The same pattern covers Google Calendar and LLM summaries: queued rows, retried by a
-worker, degrading to a visible failed state. **Trade-off accepted:** email is no
-longer instant — up to one worker interval. Invisible for a booking confirmation;
-unacceptable for a one-time passcode, which would justify a different design.
+The same pattern covers Google Calendar, rescheduling and LLM summaries: queued
+rows, retried by a worker, degrading to a visible failed state. **Trade-off accepted:** email is no longer
+instant — up to one worker interval. Invisible for a booking confirmation;
+unacceptable for a passcode, which would justify a different design.
 
 ---
-*789 words, excluding headings and the SQL block.*
+*Under 800 words, excluding headings and the SQL block.*

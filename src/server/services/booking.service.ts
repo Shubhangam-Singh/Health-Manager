@@ -3,7 +3,7 @@ import { AppError } from "@/server/lib/errors";
 import { translateDbError, type DbErrorLike } from "@/server/lib/db-errors";
 import { getAvailableSlots, isoDateInZone } from "./slot.service";
 import type { SymptomFormInput } from "@/server/validation/symptom.schema";
-import { queueCalendarEvents, queueCalendarDeletion } from "./calendar.service";
+import { queueCalendarEvents, queueCalendarDeletion, queueCalendarUpdate } from "./calendar.service";
 import { queueNotification } from "./notification.service";
 
 /**
@@ -286,4 +286,104 @@ export async function cancelAppointment(input: {
 
     return updated;
   });
+}
+
+/**
+ * Move an appointment to a different time.
+ *
+ * Implemented as an UPDATE, not cancel-and-rebook, for three reasons:
+ *  - the appointment keeps its id, so the symptom form, summaries, notes and
+ *    prescription stay attached to it
+ *  - the Google Calendar event is PATCHED rather than deleted and recreated,
+ *    which preserves the attendee's own reminders on it
+ *  - the partial unique index still arbitrates the new slot, so two people
+ *    rescheduling into the same time cannot both win
+ */
+export async function rescheduleAppointment(input: {
+  appointmentId: string;
+  userId: string;
+  newStartAt: Date;
+}) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: input.appointmentId },
+    include: {
+      patient: { select: { id: true, name: true } },
+      doctor: {
+        select: {
+          id: true, slotDurationMin: true, timezone: true, specialisation: true,
+          user: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  const isPatient = appointment?.patientId === input.userId;
+  const isDoctor = appointment?.doctor.user.id === input.userId;
+  if (!appointment || (!isPatient && !isDoctor)) {
+    throw new AppError("NOT_FOUND", "Appointment not found");
+  }
+  if (appointment.status !== "CONFIRMED") {
+    throw new AppError("CONFLICT", "Only a confirmed appointment can be moved");
+  }
+  if (appointment.startAt.getTime() === input.newStartAt.getTime()) {
+    throw new AppError("CONFLICT", "That is already the appointment time");
+  }
+
+  // Is the requested time a real, free slot? A unique index cannot answer
+  // "inside working hours, not a leave day, not in the past".
+  const date = isoDateInZone(input.newStartAt, appointment.doctor.timezone);
+  const available = await getAvailableSlots(appointment.doctor.id, date);
+  if (!available.some((s) => s.startAt.getTime() === input.newStartAt.getTime())) {
+    throw new AppError("CONFLICT", "That slot is not available");
+  }
+
+  const newEndAt = new Date(
+    input.newStartAt.getTime() + appointment.doctor.slotDurationMin * 60000,
+  );
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const updated = await tx.appointment.update({
+        where: { id: input.appointmentId },
+        data: { startAt: input.newStartAt, endAt: newEndAt },
+      });
+
+      const payload = {
+        appointmentId: appointment.id,
+        startAt: input.newStartAt.toISOString(),
+        endAt: newEndAt.toISOString(),
+        timezone: appointment.doctor.timezone,
+        doctorName: appointment.doctor.user.name,
+        specialisation: appointment.doctor.specialisation,
+        patientName: appointment.patient.name,
+      };
+
+      // Both parties are told, because either could have initiated it. The key
+      // includes the new time, so moving twice sends two distinct notices while
+      // a retry of the same move still sends only one.
+      const stamp = input.newStartAt.toISOString();
+      await queueNotification(tx, {
+        userId: appointment.patientId,
+        type: "BOOKING_CONFIRMATION",
+        payload: { ...payload, audience: "PATIENT" },
+        idempotencyKey: `rescheduled:${appointment.id}:${stamp}:patient`,
+      });
+      await queueNotification(tx, {
+        userId: appointment.doctor.user.id,
+        type: "BOOKING_CONFIRMATION",
+        payload: { ...payload, audience: "DOCTOR" },
+        idempotencyKey: `rescheduled:${appointment.id}:${stamp}:doctor`,
+      });
+
+      await queueCalendarUpdate(tx, appointment.id);
+
+      return updated;
+    });
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    // Lost the race for the new slot: someone else booked it first.
+    const known = translateDbError(e as DbErrorLike);
+    if (known) throw known;
+    throw e;
+  }
 }
