@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import RouteProgress from "@/components/RouteProgress";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -45,7 +46,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Thin bar at the top of the viewport during route transitions. */}
         <div id="route-progress" aria-hidden />
-        <RouteProgress />
+        {/* Suspense is REQUIRED: RouteProgress calls useSearchParams(), and it
+            lives in the root layout, so it is pulled into /_not-found — which
+            Next prerenders statically. Without a boundary the build fails with
+            "useSearchParams() should be wrapped in a suspense boundary". */}
+        <Suspense fallback={null}>
+          <RouteProgress />
+        </Suspense>
         {children}
       </body>
     </html>
