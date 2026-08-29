@@ -514,6 +514,8 @@ Stated plainly rather than hidden.
 
 ## Further reading
 
+- [`docs/TECHNICAL_DEEP_DIVE.md`](docs/TECHNICAL_DEEP_DIVE.md) — how every part
+  works and why, with the measurements behind each claim.
 - [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) — 39 decisions with
   alternatives considered and trade-offs accepted.
 - [`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md) — the 800-word write-up.
