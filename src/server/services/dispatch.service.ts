@@ -3,10 +3,12 @@ import { renderEmail, type NotificationPayload } from "@/server/lib/email-templa
 import {
   findDueNotifications, markSent, markFailed, MAX_ATTEMPTS,
 } from "./notification.service";
+import { isDeliverable } from "./dispatch.core";
 
 export type DispatchReport = {
   considered: number;
   sent: number;
+  skipped: number;
   retryScheduled: number;
   gaveUp: number;
   transport: string;
@@ -25,11 +27,20 @@ export async function dispatchPendingNotifications(batchSize = 20): Promise<Disp
   const due = await findDueNotifications(batchSize);
 
   const report: DispatchReport = {
-    considered: due.length, sent: 0, retryScheduled: 0, gaveUp: 0,
+    considered: due.length, sent: 0, skipped: 0, retryScheduled: 0, gaveUp: 0,
     transport: mailer.describe(),
   };
 
   for (const n of due) {
+    // Never attempt a reserved domain. Marked SENT rather than FAILED because
+    // nothing is wrong with the system — there is simply nobody to deliver to,
+    // and leaving it PENDING would retry the bounce five more times.
+    if (!isDeliverable(n.user.email ?? "")) {
+      await markSent(n.id);
+      report.skipped++;
+      continue;
+    }
+
     try {
       if (!n.user.email) throw new Error("recipient has no email address");
 

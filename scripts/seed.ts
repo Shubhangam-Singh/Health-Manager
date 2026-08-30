@@ -18,6 +18,15 @@ const PASSWORD = {
 const IST = "Asia/Kolkata";
 const hhmm = (h: number, m = 0) => h * 60 + m;
 
+/**
+ * Demo addresses use RFC 2606 reserved domains (.test) ON PURPOSE: they can
+ * never resolve, so a demo can never accidentally email a real person. The
+ * dispatcher recognises them and skips delivery rather than attempting a send
+ * that the provider would accept and then bounce back to the operator.
+ *
+ * To receive real email, register an account through the UI with an address
+ * you own.
+ */
 async function main() {
   const db = new Client({ connectionString: process.env.DIRECT_URL });
   await db.connect();
